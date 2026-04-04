@@ -65,7 +65,7 @@ function calcLad(players, st) {
     const a = s[m.player1], b = s[m.player2]; if (!a || !b) return;
     a.mp++; b.mp++; a.rw += m.score1; a.rl += m.score2; b.rw += m.score2; b.rl += m.score1;
     if (m.completedAt) { if (m.completedAt > a.last) a.last = m.completedAt; if (m.completedAt > b.last) b.last = m.completedAt; }
-    if (m.forfeit || (m.score1 === 0 && m.score2 === 0 && m.type !== "open")) { a.points -= 1; a.boxPts -= 1; b.points -= 1; b.boxPts -= 1; a.losses++; b.losses++; a.streak = 0; b.streak = 0; return; }
+    if (m.forfeit || (m.score1 === 0 && m.score2 === 0 && m.type !== "open")) { a.losses++; b.losses++; a.streak = 0; b.streak = 0; return; }
     if (m.type === "open") {
       if (m.score1 > m.score2) { a.points += 1; a.openPts += 1; a.wins++; b.losses++; a.streak = a.streak > 0 ? a.streak + 1 : 1; b.streak = 0; }
       else { b.points += 1; b.openPts += 1; b.wins++; a.losses++; b.streak = b.streak > 0 ? b.streak + 1 : 1; a.streak = 0; }
@@ -205,9 +205,9 @@ function App() {
   const onTouchEnd = (e) => { if (e.changedTouches[0].clientY - touchStartY.current > 70 && window.scrollY === 0) forceRefresh(); };
   const cd = useCD();
   const ladder = st ? calcLad(st.players, st) : [];
-  const activeIds = st && st.boxes ? [...new Set(st.boxes.flatMap(b => b.players))] : [];
-  const activeLad = ladder.filter(s => activeIds.includes(s.id));
-  const rankChanges = st ? getRankChanges(activeLad, st, st.players) : {};
+  const activeIds = st ? new Set([...(st.boxes || []).flatMap(b => b.players), ...(st.openChallenges || []).filter(m => m.completed).flatMap(m => [m.player1, m.player2]), ...(st.boxMatches || []).filter(m => m.completed).flatMap(m => [m.player1, m.player2]), ...(st.wildCards || []).filter(m => m.completed).flatMap(m => [m.player1, m.player2])]) : new Set();
+  const activeLad = ladder.filter(s => activeIds.has(s.id));
+  const rankChanges = st ? getRankChanges(ladder, st, st.players) : {};
   const gn = (id) => { if (!st) return "?"; const p = st.players.find(x => x.id === id); return p ? p.name : "?"; };
   const ini = (id) => gn(id).split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 3);
   const champions = st ? getChampions(st, gn) : [];
@@ -223,18 +223,18 @@ function App() {
   const selLast = () => { const lb = st.boxes.length ? st.boxes : (st.pastCycles.length ? st.pastCycles[st.pastCycles.length - 1].boxes : []); if (!lb || !lb.length) { flash("No previous cycle"); return; } const ids = [...new Set(lb.flatMap(b => b.players))].filter(id => st.players.some(p => p.id === id)); save({ ...st, checkedIn: ids }); flash(ids.length + " from last cycle!"); };
   const startCyc = () => {
     if (st.checkedIn.length < 4) { flash("Need 4+"); return; }
-    const bon = [], pen = [];
-    const afBM = (st.boxMatches || []).map(m => { if (!m.completed) { pen.push({ id: m.player1, pts: -1 }, { id: m.player2, pts: -1 }); return { ...m, score1: 0, score2: 0, completed: true, completedAt: nw(), forfeit: true }; } return m; });
-    const afWC = (st.wildCards || []).map(m => { if (!m.completed) { pen.push({ id: m.player1, pts: -1 }, { id: m.player2, pts: -1 }); return { ...m, score1: 0, score2: 0, completed: true, completedAt: nw(), forfeit: true }; } return m; });
+    const bon = [];
+    const afBM = (st.boxMatches || []).map(m => { if (!m.completed) { return { ...m, score1: 0, score2: 0, completed: true, completedAt: nw(), forfeit: true, autoForfeit: true }; } return m; });
+    const afWC = (st.wildCards || []).map(m => { if (!m.completed) { return { ...m, score1: 0, score2: 0, completed: true, completedAt: nw(), forfeit: true, autoForfeit: true }; } return m; });
     if (st.boxes) st.boxes.forEach((box, bi) => { const bm = afBM.filter(m => m.box === bi); if (bm.length > 0 && bm.every(m => m.completed)) { const bs = boxSt(box.players, bm); if (bs[0]) bon.push({ id: bs[0].id, pts: 3 }); if (bs[1]) bon.push({ id: bs[1].id, pts: 1 }); } });
-    const past = st.cycleNumber > 0 ? [...st.pastCycles, { cycle: st.cycleNumber, boxMatches: afBM, wildCards: afWC, openChallenges: st.openChallenges, boxes: st.boxes, bonuses: [...bon, ...pen], startedAt: st.cycleStart }] : st.pastCycles;
+    const past = st.cycleNumber > 0 ? [...st.pastCycles, { cycle: st.cycleNumber, boxMatches: afBM, wildCards: afWC, openChallenges: st.openChallenges, boxes: st.boxes, bonuses: [...bon], startedAt: st.cycleStart }] : st.pastCycles;
     const nl = calcLad(st.players, { ...st, pastCycles: past, boxMatches: [], wildCards: [], openChallenges: [], boxes: [] });
     const boxes = buildBoxes(st.checkedIn, nl); const bm = genBM(boxes); const wc = genWC(boxes);
     const ns = { ...st, pastCycles: past, boxes, boxMatches: bm, wildCards: wc, openChallenges: [], cycleStart: nw(), cycleNumber: st.cycleNumber + 1 };
     save(withLog(ns, "CYCLE_STARTED", curMonth()));
     flash(curMonth() + " started!");
   };
-  const undoCyc = () => { if (st.cycleNumber < 1) return; const prev = st.pastCycles[st.pastCycles.length - 1]; const base = prev ? { ...st, pastCycles: st.pastCycles.slice(0, -1), boxes: prev.boxes || [], boxMatches: prev.boxMatches || [], wildCards: prev.wildCards || [], openChallenges: prev.openChallenges || [], cycleStart: prev.startedAt, cycleNumber: st.cycleNumber - 1 } : { ...st, boxes: [], boxMatches: [], wildCards: [], openChallenges: [], cycleStart: null, cycleNumber: 0 }; save(withLog(base, "CYCLE_UNDONE", "Cycle " + st.cycleNumber)); flash("Undone!"); };
+  const undoCyc = () => { if (st.cycleNumber < 1) return; const prev = st.pastCycles[st.pastCycles.length - 1]; const restore = arr => (arr || []).map(m => m.autoForfeit ? { ...m, score1: null, score2: null, completed: false, completedAt: null, forfeit: false, autoForfeit: false } : m); const base = prev ? { ...st, pastCycles: st.pastCycles.slice(0, -1), boxes: prev.boxes || [], boxMatches: restore(prev.boxMatches), wildCards: restore(prev.wildCards), openChallenges: prev.openChallenges || [], cycleStart: prev.startedAt, cycleNumber: st.cycleNumber - 1 } : { ...st, boxes: [], boxMatches: [], wildCards: [], openChallenges: [], cycleStart: null, cycleNumber: 0 }; save(withLog(base, "CYCLE_UNDONE", "Cycle " + st.cycleNumber)); flash("Undone!"); };
   const logR = (id, s1, s2, list) => { const m = st[list].find(x => x.id === id); const det = m ? gn(m.player1) + " " + s1 + "-" + s2 + " " + gn(m.player2) : id; save(withLog({ ...st, [list]: st[list].map(m => m.id === id ? { ...m, score1: s1, score2: s2, completed: true, completedAt: nw(), forfeit: false } : m) }, "MATCH_RECORDED", det)); flash("Recorded!"); };
   const ffM = (id, list) => { const m = st[list].find(x => x.id === id); const det = m ? gn(m.player1) + " vs " + gn(m.player2) : id; save(withLog({ ...st, [list]: st[list].map(m => m.id === id ? { ...m, score1: 0, score2: 0, completed: true, completedAt: nw(), forfeit: true } : m) }, "MATCH_FORFEIT", det)); flash("Forfeit -1pt each"); };
   const newOC = (p1, p2) => { if (p1 === p2) { flash("Same player!"); return; } const oc = { id: uid(), type: "open", player1: p1, player2: p2, score1: null, score2: null, completed: false, completedAt: null }; save(withLog({ ...st, openChallenges: [...st.openChallenges, oc] }, "CHALLENGE_CREATED", gn(p1) + " vs " + gn(p2))); flash("Challenge created!"); };
