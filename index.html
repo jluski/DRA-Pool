@@ -47,6 +47,7 @@ function genWC(boxes) { if (boxes.length < 2) return []; const wc = [], used = n
 function boxSt(pids, matches) {
   const s = {}; pids.forEach(id => { s[id] = { id, pts: 0, w: 0, l: 0, rw: 0, rl: 0 }; });
   matches.filter(m => m.completed).forEach(m => { if (!s[m.player1] || !s[m.player2]) return;
+    if (m.forfeit || (m.score1 === 0 && m.score2 === 0)) return;
     s[m.player1].rw += m.score1; s[m.player1].rl += m.score2; s[m.player2].rw += m.score2; s[m.player2].rl += m.score1;
     if (m.score1 > m.score2) { s[m.player1].pts += m.score2 === 0 ? 5 : 4; s[m.player1].w++; s[m.player2].pts += m.score2 > 0 ? 2 : 0; s[m.player2].l++; }
     else { s[m.player2].pts += m.score1 === 0 ? 5 : 4; s[m.player2].w++; s[m.player1].pts += m.score1 > 0 ? 2 : 0; s[m.player1].l++; } });
@@ -61,9 +62,9 @@ function calcLad(players, st) {
   const sorted = all.filter(m => m.completed).sort((a, b) => (a.completedAt || "").localeCompare(b.completedAt || ""));
   sorted.forEach(m => {
     const a = s[m.player1], b = s[m.player2]; if (!a || !b) return;
+    if (m.forfeit || (m.score1 === 0 && m.score2 === 0 && m.type !== "open")) return;
     a.mp++; b.mp++; a.rw += m.score1; a.rl += m.score2; b.rw += m.score2; b.rl += m.score1;
     if (m.completedAt) { if (m.completedAt > a.last) a.last = m.completedAt; if (m.completedAt > b.last) b.last = m.completedAt; }
-    if (m.forfeit || (m.score1 === 0 && m.score2 === 0 && m.type !== "open")) { a.losses++; b.losses++; a.streak = 0; b.streak = 0; return; }
     if (m.type === "open") {
       if (m.score1 > m.score2) { a.points += 1; a.openPts += 1; a.wins++; b.losses++; a.streak = a.streak > 0 ? a.streak + 1 : 1; b.streak = 0; }
       else { b.points += 1; b.openPts += 1; b.wins++; a.losses++; b.streak = b.streak > 0 ? b.streak + 1 : 1; a.streak = 0; }
@@ -242,7 +243,7 @@ function App() {
   };
   const undoCyc = () => { if (st.cycleNumber < 1) return; const prev = st.pastCycles[st.pastCycles.length - 1]; const restore = arr => (arr || []).map(m => m.autoForfeit ? { ...m, score1: null, score2: null, completed: false, completedAt: null, forfeit: false, autoForfeit: false } : m); const base = prev ? { ...st, pastCycles: st.pastCycles.slice(0, -1), boxes: prev.boxes || [], boxMatches: restore(prev.boxMatches), wildCards: restore(prev.wildCards), openChallenges: prev.openChallenges || [], cycleStart: prev.startedAt, cycleNumber: st.cycleNumber - 1 } : { ...st, boxes: [], boxMatches: [], wildCards: [], openChallenges: [], cycleStart: null, cycleNumber: 0 }; save(withLog(base, "CYCLE_UNDONE", "Cycle " + st.cycleNumber)); flash("Undone!"); };
   const logR = (id, s1, s2, list) => { const m = st[list].find(x => x.id === id); const det = m ? gn(m.player1) + " " + s1 + "-" + s2 + " " + gn(m.player2) : id; save(withLog({ ...st, [list]: st[list].map(m => m.id === id ? { ...m, score1: s1, score2: s2, completed: true, completedAt: nw(), forfeit: false } : m) }, "MATCH_RECORDED", det)); flash("Recorded!"); };
-  const ffM = (id, list) => { const m = st[list].find(x => x.id === id); const det = m ? gn(m.player1) + " vs " + gn(m.player2) : id; save(withLog({ ...st, [list]: st[list].map(m => m.id === id ? { ...m, score1: 0, score2: 0, completed: true, completedAt: nw(), forfeit: true } : m) }, "MATCH_FORFEIT", det)); flash("Forfeit -1pt each"); };
+  const ffM = (id, list) => { const m = st[list].find(x => x.id === id); const det = m ? gn(m.player1) + " vs " + gn(m.player2) : id; save(withLog({ ...st, [list]: st[list].map(m => m.id === id ? { ...m, score1: 0, score2: 0, completed: true, completedAt: nw(), forfeit: true } : m) }, "MATCH_FORFEIT", det)); flash("Match marked not played"); };
   const newOC = (p1, p2) => { if (p1 === p2) { flash("Same player!"); return; } const oc = { id: uid(), type: "open", player1: p1, player2: p2, score1: null, score2: null, completed: false, completedAt: null }; save(withLog({ ...st, openChallenges: [...st.openChallenges, oc] }, "CHALLENGE_CREATED", gn(p1) + " vs " + gn(p2))); flash("Challenge created!"); };
   const resetAll = () => { save(DEF); flash("Reset!"); setView("home"); };
 
@@ -326,13 +327,13 @@ function Home({ st, ladder, gn, ini, cd }) {
   // Cycle progress summary
   const boxSummaries = (st.boxes || []).map((box, bi) => {
     const bm = (st.boxMatches || []).filter(m => m.box === bi);
-    const done = bm.filter(m => m.completed && !m.autoForfeit).length;
+    const done = bm.filter(m => m.completed && !m.forfeit).length;
     const total = bm.length;
     const bs = boxSt(box.players, bm);
     const complete = total > 0 && bm.every(m => m.completed);
     return { box, bi, done, total, bs, complete };
   });
-  const totalDone = (st.boxMatches || []).filter(m => m.completed && !m.autoForfeit).length + (st.wildCards || []).filter(m => m.completed && !m.autoForfeit).length;
+  const totalDone = (st.boxMatches || []).filter(m => m.completed && !m.forfeit).length + (st.wildCards || []).filter(m => m.completed && !m.forfeit).length;
   const totalPend = (st.boxMatches || []).filter(m => !m.completed).length + (st.wildCards || []).filter(m => !m.completed).length;
 
   return (
@@ -513,11 +514,11 @@ function MatchesV({ st, gn, logR, ffM }) {
       </div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <span style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>{gn(m.player1)}</span>
-        <span style={{ fontSize: 14, fontWeight: 700, color: m.completed ? P.orange : P.dim, padding: "0 10px" }}>{m.completed ? m.score1 + " – " + m.score2 : "vs"}</span>
+        <span style={{ fontSize: 14, fontWeight: 700, color: m.completed ? (m.forfeit ? P.dim : P.orange) : P.dim, padding: "0 10px" }}>{m.completed ? (m.forfeit ? "—" : m.score1 + " – " + m.score2) : "vs"}</span>
         <span style={{ flex: 1, fontSize: 14, fontWeight: 600, textAlign: "right" }}>{gn(m.player2)}</span>
       </div>
-      {m.completed && m.score1 === 0 && m.score2 === 0 && <div style={{ fontSize: 11, color: P.bad, marginTop: 5, fontStyle: "italic" }}>Forfeit — both -1pt</div>}
-      {m.completed && !(m.score1 === 0 && m.score2 === 0) && <div style={{ fontSize: 11, color: P.ok, marginTop: 5 }}>{m.score1 > m.score2 ? gn(m.player1) : gn(m.player2)} wins</div>}
+      {m.completed && m.forfeit && <div style={{ fontSize: 11, color: P.dim, marginTop: 5, fontStyle: "italic" }}>Not played</div>}
+      {m.completed && !m.forfeit && !(m.score1 === 0 && m.score2 === 0) && <div style={{ fontSize: 11, color: P.ok, marginTop: 5 }}>{m.score1 > m.score2 ? gn(m.player1) : gn(m.player2)} wins</div>}
       {m.completed && sc !== m.id && <button onClick={() => { setSc(m.id); setS1(m.score1); setS2(m.score2); }} style={{ marginTop: 6, padding: "5px 12px", background: "transparent", border: "1px solid " + P.dim, borderRadius: 8, color: P.dim, fontWeight: 600, fontSize: 10, cursor: "pointer" }}>Edit Score</button>}
       {!m.completed && sc !== m.id && <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
         <button onClick={() => { setSc(m.id); setS1(2); setS2(0); }} style={{ ...bpS, width: "auto", display: "inline-block", padding: "8px 18px", marginTop: 0 }}>Log Score</button>
@@ -655,8 +656,8 @@ function CheckInV({ st, ladder, togCI }) {
 // ─── ADMIN ───────────────────────────────────────────────────
 function PastCycleRow({ c, gn }) {
   const [open, setOpen] = useState(false);
-  const bxDone = (c.boxMatches || []).filter(m => m.completed && !m.autoForfeit).length;
-  const wcDone = (c.wildCards || []).filter(m => m.completed && !m.autoForfeit).length;
+  const bxDone = (c.boxMatches || []).filter(m => m.completed && !m.forfeit).length;
+  const wcDone = (c.wildCards || []).filter(m => m.completed && !m.forfeit).length;
   const ocDone = (c.openChallenges || []).filter(m => m.completed).length;
   return (
     <div style={{ borderBottom: "1px solid rgba(21,152,203,.08)", paddingBottom: open ? 12 : 0, marginBottom: 8 }}>
@@ -686,10 +687,10 @@ function PastCycleRow({ c, gn }) {
               </div>
             );
           })}
-          {(c.wildCards || []).filter(m => m.completed && !m.autoForfeit).length > 0 && (
+          {(c.wildCards || []).filter(m => m.completed && !m.forfeit).length > 0 && (
             <div style={{ marginBottom: 8 }}>
               <p style={{ fontSize: 9, color: "#C4A1FF", fontWeight: 700, letterSpacing: 2, marginBottom: 4 }}>WILD CARDS</p>
-              {(c.wildCards || []).filter(m => m.completed && !m.autoForfeit).map(m => (
+              {(c.wildCards || []).filter(m => m.completed && !m.forfeit).map(m => (
                 <div key={m.id} style={{ display: "flex", alignItems: "center", padding: "4px 0", borderBottom: "1px solid rgba(21,152,203,.04)", fontSize: 12, gap: 6 }}>
                   <span style={{ flex: 1, textAlign: "right" }}>{gn(m.player1)}</span>
                   <span style={{ color: P.orange, fontWeight: 700, width: 40, textAlign: "center" }}>{m.score1}–{m.score2}</span>
