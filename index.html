@@ -26,7 +26,6 @@
 const { useState, useEffect, useCallback } = React;
 
 
-const SK = "dra-pool-v8";
 const CYCLE_DAYS = 30;
 const P = { navy:"#001B36", mid:"#003052", blue:"#1598CB", orange:"#F18A00", amber:"#FFAD33", white:"#FFF", off:"#C8DAE8", grey:"#7B95AA", dim:"#4A6275", glass:"rgba(0,40,70,.45)", gb:"rgba(21,152,203,.18)", ok:"#34D399", bad:"#F87171" };
 const uid = () => Math.random().toString(36).slice(2, 9);
@@ -179,11 +178,6 @@ const StreakBadge = ({ streak }) => {
   if (streak < 3) return null;
   return <span style={{ fontSize: 10, marginLeft: 4 }}>{"\ud83d\udd25"}{streak}</span>;
 };
-const H2HBadge = ({ h2h }) => {
-  if (!h2h) return null;
-  return <span style={{ fontSize: 9, color: P.dim, marginLeft: 4 }}>({h2h.w1}-{h2h.w2})</span>;
-};
-
 function App() {
   const [st, setSt] = useState(null);
   const [view, setView] = useState("home");
