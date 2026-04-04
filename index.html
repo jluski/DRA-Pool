@@ -188,17 +188,19 @@ function App() {
   const [refreshing, setRefreshing] = useState(false);
   const [navIdx, setNavIdx] = useState(0);
   const [tappedTab, setTappedTab] = useState(null);
+  const [dbError, setDbError] = useState(null);
   const touchStartY = React.useRef(0);
 
-  useEffect(() => {
-    const unsub = DOC_REF.onSnapshot(
-      (doc) => { if (doc.exists) setSt(doc.data()); else DOC_REF.set(DEF).then(() => setSt(DEF)); },
-      (error) => { console.error("Firestore:", error); setSt(DEF); }
-    );
-    return () => unsub();
-  }, []);
-  const save = useCallback(async (s) => { setSt(s); try { await DOC_REF.set(s); } catch (e) {} }, []);
   const flash = (m) => { setToast(m); setTimeout(() => setToast(null), 2800); };
+  useEffect(() => {
+    const timeout = setTimeout(() => { if (!st) setDbError("Firestore timed out — check internet connection and Firebase security rules."); }, 10000);
+    const unsub = DOC_REF.onSnapshot(
+      (doc) => { clearTimeout(timeout); setDbError(null); if (doc.exists) setSt(doc.data()); else DOC_REF.set(DEF).then(() => setSt(DEF)).catch(e => setDbError(e.message)); },
+      (error) => { clearTimeout(timeout); console.error("Firestore:", error); setDbError(error.message); }
+    );
+    return () => { unsub(); clearTimeout(timeout); };
+  }, []);
+  const save = useCallback(async (s) => { setSt(s); try { await DOC_REF.set(s); } catch (e) { console.error("Save failed:", e); flash("Save failed — check connection"); } }, []);
   const forceRefresh = useCallback(() => { setRefreshing(true); DOC_REF.get().then(doc => { if (doc.exists) setSt(doc.data()); }).catch(() => {}).finally(() => setRefreshing(false)); }, []);
   const onTouchStart = (e) => { touchStartY.current = e.touches[0].clientY; };
   const onTouchEnd = (e) => { if (e.changedTouches[0].clientY - touchStartY.current > 70 && window.scrollY === 0) forceRefresh(); };
@@ -212,7 +214,20 @@ function App() {
   const champions = st ? getChampions(st, gn) : [];
   const boxWinners = st ? getBoxWinners(st, gn) : [];
 
-  if (!st) return <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: P.navy }}><div style={{ width: 36, height: 36, border: "2px solid " + P.mid, borderTop: "2px solid " + P.orange, borderRadius: "50%", animation: "spin .7s linear infinite" }} /><style>{"@keyframes spin{to{transform:rotate(360deg)}}"}</style></div>;
+  if (!st) return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100vh", background: P.navy, padding: 24, gap: 16 }}>
+      <style>{"@keyframes spin{to{transform:rotate(360deg)}}"}</style>
+      {!dbError ? <div style={{ width: 36, height: 36, border: "2px solid " + P.mid, borderTop: "2px solid " + P.orange, borderRadius: "50%", animation: "spin .7s linear infinite" }} /> : null}
+      {dbError ? (
+        <div style={{ textAlign: "center", maxWidth: 320 }}>
+          <p style={{ fontSize: 28, marginBottom: 12 }}>{"⚠️"}</p>
+          <p style={{ fontWeight: 700, color: P.bad, marginBottom: 8, fontSize: 14 }}>Firebase Error</p>
+          <p style={{ fontSize: 12, color: P.grey, marginBottom: 16, lineHeight: 1.5 }}>{dbError}</p>
+          <button onClick={() => window.location.reload()} style={{ padding: "10px 24px", background: "linear-gradient(135deg," + P.orange + "," + P.amber + ")", color: P.navy, border: "none", borderRadius: 12, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Retry</button>
+        </div>
+      ) : <p style={{ color: P.dim, fontSize: 12 }}>Connecting to Firebase…</p>}
+    </div>
+  );
 
   const addP = (n) => { if (!n.trim() || st.players.find(p => p.name.toLowerCase() === n.trim().toLowerCase())) { flash("Invalid/duplicate"); return; } const np = { id: uid(), name: n.trim(), joinedAt: nw() }; save(withLog({ ...st, players: [...st.players, np] }, "PLAYER_ADDED", n.trim())); flash(n.trim() + " joined!"); };
   const rmP = (id) => { const nm = (st.players.find(p => p.id === id) || {}).name || id; save(withLog({ ...st, players: st.players.filter(p => p.id !== id), checkedIn: st.checkedIn.filter(c => c !== id) }, "PLAYER_REMOVED", nm)); flash("Removed"); };
@@ -220,7 +235,6 @@ function App() {
   const selAll = () => { save({ ...st, checkedIn: st.players.map(p => p.id) }); flash("All checked in!"); };
   const deselAll = () => { save({ ...st, checkedIn: [] }); flash("All unchecked"); };
   const selLast = () => { const lb = st.boxes.length ? st.boxes : (st.pastCycles.length ? st.pastCycles[st.pastCycles.length - 1].boxes : []); if (!lb || !lb.length) { flash("No previous cycle"); return; } const ids = [...new Set(lb.flatMap(b => b.players))].filter(id => st.players.some(p => p.id === id)); save({ ...st, checkedIn: ids }); flash(ids.length + " from last cycle!"); };
-  const selBox = (boxPlayers) => { const ids = boxPlayers.filter(id => st.players.some(p => p.id === id)); save({ ...st, checkedIn: [...new Set([...st.checkedIn, ...ids])] }); flash(ids.length + " checked in!"); };
   const startCyc = () => {
     if (st.checkedIn.length < 4) { flash("Need 4+"); return; }
     const bon = [], pen = [];
@@ -277,7 +291,7 @@ function App() {
         {view === "boxes" && <BoxesV st={st} gn={gn} ini={ini} />}
         {view === "matches" && <MatchesV st={st} gn={gn} logR={logR} ffM={ffM} />}
         {view === "challenge" && <ChallengeV players={st.players} newOC={newOC} />}
-        {view === "checkin" && <CheckInV st={st} ladder={ladder} togCI={togCI} selAll={selAll} deselAll={deselAll} selLast={selLast} selBox={selBox} />}
+        {view === "checkin" && <CheckInV st={st} ladder={ladder} togCI={togCI} selAll={selAll} deselAll={deselAll} selLast={selLast} />}
         {view === "admin" && <AdminV st={st} ladder={ladder} startCyc={startCyc} undoCyc={undoCyc} resetAll={resetAll} addP={addP} rmP={rmP} ffM={ffM} gn={gn} />}
       </main>
       <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 10, padding: "0 14px", paddingBottom: "max(10px, env(safe-area-inset-bottom))" }}>
@@ -545,7 +559,7 @@ function ChallengeV({ players, newOC }) {
 }
 
 // ─── CHECK IN ───────────────────────────────────────────────
-function CheckInV({ st, ladder, togCI, selAll, deselAll, selLast, selBox }) {
+function CheckInV({ st, ladder, togCI, selAll, deselAll, selLast }) {
   const [search, setSearch] = useState("");
   const [showPlaying, setShowPlaying] = useState(true);
   const [showJoin, setShowJoin] = useState(true);
@@ -553,7 +567,6 @@ function CheckInV({ st, ladder, togCI, selAll, deselAll, selLast, selBox }) {
   const playing = ladder.filter(s => st.checkedIn.includes(s.id));
   const notPlaying = ladder.filter(s => !st.checkedIn.includes(s.id));
   const filtered = search.trim() ? notPlaying.filter(s => s.name.toLowerCase().includes(search.toLowerCase())) : notPlaying;
-  const lastBoxes = st.boxes && st.boxes.length ? st.boxes : (st.pastCycles && st.pastCycles.length ? st.pastCycles[st.pastCycles.length - 1].boxes || [] : []);
 
   const secBtn = (label, show, onToggle) => (
     <div onClick={onToggle} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 0 6px", cursor: "pointer", userSelect: "none" }}>
@@ -591,14 +604,7 @@ function CheckInV({ st, ladder, togCI, selAll, deselAll, selLast, selBox }) {
     {secBtn("Join the Game (" + notPlaying.length + ")", showJoin, () => setShowJoin(v => !v))}
     {showJoin && (
       <div style={gc}>
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search players..." style={{ ...inpS, width: "100%", marginBottom: lastBoxes.length ? 10 : 4, flex: "none" }} />
-        {lastBoxes.length > 0 && (
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
-            {lastBoxes.map((box, i) => (
-              <button key={i} onClick={() => selBox(box.players)} style={{ padding: "5px 12px", background: P.glass, border: "1px solid " + P.gb, borderRadius: 8, color: box.isSwing ? P.blue : P.orange, fontSize: 10, fontWeight: 700, cursor: "pointer" }}>+ {box.name}</button>
-            ))}
-          </div>
-        )}
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search players..." style={{ ...inpS, width: "100%", marginBottom: 8, flex: "none" }} />
         {filtered.map(s => (
           <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 4px", borderBottom: "1px solid rgba(21,152,203,.06)" }}>
             <span style={{ flex: 1, fontSize: 13 }}>{s.name}</span>
