@@ -284,7 +284,7 @@ function App() {
         {view === "boxes" && <BoxesV st={st} gn={gn} ini={ini} />}
         {view === "matches" && <MatchesV st={st} gn={gn} logR={logR} ffM={ffM} />}
         {view === "challenge" && <ChallengeV players={st.players} newOC={newOC} />}
-        {view === "checkin" && <CheckInV st={st} ladder={ladder} togCI={togCI} selAll={selAll} deselAll={deselAll} selLast={selLast} />}
+        {view === "checkin" && <CheckInV st={st} ladder={ladder} togCI={togCI} />}
         {view === "admin" && <AdminV st={st} ladder={ladder} startCyc={startCyc} completeCyc={completeCyc} undoCyc={undoCyc} resetAll={resetAll} addP={addP} rmP={rmP} ffM={ffM} gn={gn} save={save} />}
       </main>
       <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 10, padding: "0 14px", paddingBottom: "max(10px, env(safe-area-inset-bottom))" }}>
@@ -573,12 +573,10 @@ function ChallengeV({ players, newOC }) {
 }
 
 // ─── CHECK IN ───────────────────────────────────────────────
-function CheckInV({ st, ladder, togCI, selAll, deselAll, selLast }) {
+function CheckInV({ st, ladder, togCI }) {
   const [search, setSearch] = useState("");
   const [showSignUp, setShowSignUp] = useState(true);
   const [showRemaining, setShowRemaining] = useState(false);
-  const allCk = st.checkedIn.length === st.players.length && st.players.length > 0;
-
   // Playing This Period — players in the current active cycle
   const currentIds = new Set((st.boxes || []).flatMap(b => b.players));
   const currentPlayers = ladder.filter(s => currentIds.has(s.id));
@@ -616,12 +614,6 @@ function CheckInV({ st, ladder, togCI, selAll, deselAll, selLast }) {
   return (<div style={{ paddingTop: 16 }}>
     <Tt>Players</Tt>
     <p style={{ fontSize: 12, color: P.grey, marginBottom: 10 }}>{st.checkedIn.length} of {st.players.length} signed up for next period</p>
-
-    {/* Quick Actions */}
-    <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
-      <button onClick={allCk ? deselAll : selAll} style={{ padding: "6px 12px", background: P.glass, border: "1px solid " + P.gb, borderRadius: 8, color: allCk ? P.bad : P.ok, fontSize: 10, fontWeight: 700, cursor: "pointer" }}>{allCk ? "Deselect All" : "Select All"}</button>
-      <button onClick={selLast} style={{ padding: "6px 12px", background: P.glass, border: "1px solid " + P.gb, borderRadius: 8, color: P.blue, fontSize: 10, fontWeight: 700, cursor: "pointer" }}>Last Period</button>
-    </div>
 
     {/* Playing This Period — read-only */}
     {st.cycleNumber > 0 && currentPlayers.length > 0 && (<>
