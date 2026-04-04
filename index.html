@@ -26,7 +26,9 @@
 const { useState, useEffect, useCallback } = React;
 
 
-const CYCLE_DAYS = 30;
+const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const monthName = (iso) => { const d = new Date(iso || Date.now()); return MONTHS[d.getMonth()] + " " + d.getFullYear(); };
+const curMonth = () => monthName(Date.now());
 const P = { navy:"#001B36", mid:"#003052", blue:"#1598CB", orange:"#F18A00", amber:"#FFAD33", white:"#FFF", off:"#C8DAE8", grey:"#7B95AA", dim:"#4A6275", glass:"rgba(255,255,255,.05)", gb:"rgba(255,255,255,.12)", ok:"#34D399", bad:"#F87171", glow:"rgba(21,152,203,.25)" };
 const uid = () => Math.random().toString(36).slice(2, 9);
 const nw = () => new Date().toISOString();
@@ -153,7 +155,7 @@ const PLAYERS = ["Gianna Acitelli","Elvira Aguillon","Koula Angelinas","Jean Mar
 const DEF = { players: PLAYERS, boxes: [], boxMatches: [], wildCards: [], openChallenges: [], checkedIn: [], pastCycles: [], cycleNumber: 0, cycleStart: null, auditLog: [] };
 const withLog = (s, action, details) => { const al = [...(s.auditLog || []), { id: uid(), ts: nw(), action, details }]; return { ...s, auditLog: al.length > 200 ? al.slice(-200) : al }; };
 
-function useCD(start) { const [r, setR] = useState({ d: 0, h: 0, m: 0 }); useEffect(() => { if (!start) return; const tick = () => { const diff = Math.max(0, new Date(start).getTime() + CYCLE_DAYS * 864e5 - Date.now()); setR({ d: Math.floor(diff / 864e5), h: Math.floor((diff % 864e5) / 36e5), m: Math.floor((diff % 36e5) / 6e4) }); }; tick(); const id = setInterval(tick, 6e4); return () => clearInterval(id); }, [start]); return r; }
+function useCD() { const [r, setR] = useState({ d: 0, h: 0, m: 0 }); useEffect(() => { const tick = () => { const now = new Date(); const end = new Date(now.getFullYear(), now.getMonth() + 1, 1); const diff = Math.max(0, end.getTime() - now.getTime()); setR({ d: Math.floor(diff / 864e5), h: Math.floor((diff % 864e5) / 36e5), m: Math.floor((diff % 36e5) / 6e4) }); }; tick(); const id = setInterval(tick, 6e4); return () => clearInterval(id); }, []); return r; }
 
 const gc = { background: "rgba(255,255,255,.05)", backdropFilter: "blur(28px) saturate(160%) brightness(1.05)", WebkitBackdropFilter: "blur(28px) saturate(160%) brightness(1.05)", border: "1px solid rgba(255,255,255,.12)", borderTop: "1px solid rgba(255,255,255,.22)", borderRadius: 20, padding: 16, marginBottom: 12, boxShadow: "0 8px 40px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.12)", transition: "transform .2s, box-shadow .2s" };
 const gt = { borderRadius: 16, overflow: "hidden", border: "1px solid rgba(255,255,255,.1)", borderTop: "1px solid rgba(255,255,255,.2)", background: "rgba(255,255,255,.04)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", boxShadow: "0 4px 24px rgba(0,0,0,.25)" };
@@ -200,7 +202,7 @@ function App() {
   const forceRefresh = useCallback(() => { setRefreshing(true); DOC_REF.get().then(doc => { if (doc.exists) setSt(doc.data()); }).catch(() => {}).finally(() => setRefreshing(false)); }, []);
   const onTouchStart = (e) => { touchStartY.current = e.touches[0].clientY; };
   const onTouchEnd = (e) => { if (e.changedTouches[0].clientY - touchStartY.current > 70 && window.scrollY === 0) forceRefresh(); };
-  const cd = useCD(st ? st.cycleStart : null);
+  const cd = useCD();
   const ladder = st ? calcLad(st.players, st) : [];
   const activeIds = st && st.boxes ? [...new Set(st.boxes.flatMap(b => b.players))] : [];
   const activeLad = ladder.filter(s => activeIds.includes(s.id));
@@ -228,8 +230,8 @@ function App() {
     const nl = calcLad(st.players, { ...st, pastCycles: past, boxMatches: [], wildCards: [], openChallenges: [], boxes: [] });
     const boxes = buildBoxes(st.checkedIn, nl); const bm = genBM(boxes); const wc = genWC(boxes);
     const ns = { ...st, pastCycles: past, boxes, boxMatches: bm, wildCards: wc, openChallenges: [], cycleStart: nw(), cycleNumber: st.cycleNumber + 1 };
-    save(withLog(ns, "CYCLE_STARTED", "Cycle " + (st.cycleNumber + 1)));
-    flash("Cycle " + (st.cycleNumber + 1) + "!");
+    save(withLog(ns, "CYCLE_STARTED", curMonth()));
+    flash(curMonth() + " started!");
   };
   const undoCyc = () => { if (st.cycleNumber < 1) return; const prev = st.pastCycles[st.pastCycles.length - 1]; const base = prev ? { ...st, pastCycles: st.pastCycles.slice(0, -1), boxes: prev.boxes || [], boxMatches: prev.boxMatches || [], wildCards: prev.wildCards || [], openChallenges: prev.openChallenges || [], cycleStart: prev.startedAt, cycleNumber: st.cycleNumber - 1 } : { ...st, boxes: [], boxMatches: [], wildCards: [], openChallenges: [], cycleStart: null, cycleNumber: 0 }; save(withLog(base, "CYCLE_UNDONE", "Cycle " + st.cycleNumber)); flash("Undone!"); };
   const logR = (id, s1, s2, list) => { const m = st[list].find(x => x.id === id); const det = m ? gn(m.player1) + " " + s1 + "-" + s2 + " " + gn(m.player2) : id; save(withLog({ ...st, [list]: st[list].map(m => m.id === id ? { ...m, score1: s1, score2: s2, completed: true, completedAt: nw(), forfeit: false } : m) }, "MATCH_RECORDED", det)); flash("Recorded!"); };
@@ -265,7 +267,7 @@ function App() {
         <div style={{ position: "absolute", width: 300, height: 300, borderRadius: "50%", background: "radial-gradient(circle, rgba(0,200,180,.08) 0%, transparent 65%)", bottom: "-80px", right: "20%", animation: "orbFloat3 10s ease-in-out infinite" }} />
       </div>
       {st.cycleStart && <div style={{ position: "sticky", top: 0, zIndex: 8, background: "rgba(255,255,255,.06)", backdropFilter: "blur(20px) saturate(150%)", WebkitBackdropFilter: "blur(20px) saturate(150%)", borderBottom: "1px solid rgba(255,255,255,.12)", boxShadow: "0 2px 20px rgba(0,0,0,.2), inset 0 1px 0 rgba(255,255,255,.15)", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 18px", animation: "slideDown .2s ease-out" }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: P.orange }}>Cycle {st.cycleNumber}</span>
+        <span style={{ fontSize: 11, fontWeight: 700, color: P.orange }}>{monthName(st.cycleStart)}</span>
         <span style={{ fontSize: 11, color: P.off }}>{cd.d}d {cd.h}h {cd.m}m left</span>
         <span style={{ fontSize: 11, color: P.grey }}>{activeLad.length} active</span>
       </div>}
@@ -310,7 +312,7 @@ function Home({ st, ladder, gn, ini, cd, rankChanges, champions, boxWinners }) {
         <p style={{ fontSize: 10, background: "linear-gradient(90deg," + P.orange + "," + P.amber + "," + P.blue + "," + P.orange + ")", backgroundSize: "300% 100%", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text", letterSpacing: 6, textTransform: "uppercase", marginTop: 8, fontWeight: 700, animation: "shimmer 4s linear infinite" }}>POOL LEAGUE</p>
         {st.cycleNumber > 0 && (
           <div style={{ ...gc, display: "inline-flex", gap: 16, marginTop: 10, padding: "6px 18px", borderRadius: 20, marginBottom: 0 }}>
-            <span style={{ fontSize: 11, color: P.grey }}>Cycle {st.cycleNumber}</span>
+            <span style={{ fontSize: 11, color: P.grey }}>{monthName(st.cycleStart)}</span>
             <span style={{ fontSize: 11, color: P.orange, fontWeight: 700 }}>{cd.d}d {cd.h}h {cd.m}m</span>
             <span style={{ fontSize: 11, color: P.grey }}>{ladder.length} players</span>
           </div>
@@ -336,7 +338,7 @@ function Home({ st, ladder, gn, ini, cd, rankChanges, champions, boxWinners }) {
           <p style={{ fontSize: 9, color: P.dim, letterSpacing: 2, fontWeight: 700, marginBottom: 4 }}>CHAMPION HISTORY</p>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             {[...champions].reverse().map((c, i) => (
-              <span key={i} style={{ fontSize: 9, color: c.current ? P.orange : P.dim, background: c.current ? "rgba(241,138,0,.15)" : "rgba(0,48,82,.3)", padding: "3px 8px", borderRadius: 6, border: c.current ? "1px solid rgba(241,138,0,.3)" : "none" }}>{"\ud83c\udfc6"} C{c.cycle}: {c.name}</span>
+              <span key={i} style={{ fontSize: 9, color: c.current ? P.orange : P.dim, background: c.current ? "rgba(241,138,0,.15)" : "rgba(0,48,82,.3)", padding: "3px 8px", borderRadius: 6, border: c.current ? "1px solid rgba(241,138,0,.3)" : "none" }}>{"\ud83c\udfc6"} {monthName(c.date)}: {c.name}</span>
             ))}
           </div>
         </div>
@@ -432,7 +434,7 @@ function BoxesV({ st, gn, ini }) {
   const getS = (bm, p1, p2) => { const m = bm.find(m => (m.player1 === p1 && m.player2 === p2) || (m.player1 === p2 && m.player2 === p1)); if (!m) return null; if (!m.completed) return { pending: true }; return { s1: m.player1 === p1 ? m.score1 : m.score2, s2: m.player1 === p1 ? m.score2 : m.score1 }; };
   const togCol = (k) => setCol(c => ({ ...c, [k]: !c[k] }));
   return (
-    <div style={{ paddingTop: 16 }}><Tt>Boxes — Cycle {st.cycleNumber}</Tt>
+    <div style={{ paddingTop: 16 }}><Tt>Boxes — {monthName(st.cycleStart)}</Tt>
       {st.boxes.map((box, bi) => { const bm = st.boxMatches.filter(m => m.box === bi); const bs = boxSt(box.players, bm); const pids = bs.map(s => s.id); const done = bm.length > 0 && bm.every(m => m.completed); const isCol = col["box_" + bi];
         return (
           <div key={bi} style={{ marginBottom: 16 }}>
@@ -511,7 +513,7 @@ function MatchesV({ st, gn, logR, ffM }) {
   const bP = (st.boxMatches || []).filter(m => !m.completed), bD = (st.boxMatches || []).filter(m => m.completed);
   const wP = (st.wildCards || []).filter(m => !m.completed), wD = (st.wildCards || []).filter(m => m.completed);
   const oP = (st.openChallenges || []).filter(m => !m.completed), oD = (st.openChallenges || []).filter(m => m.completed);
-  return (<div style={{ paddingTop: 16 }}><Tt>Cycle {st.cycleNumber} Matches</Tt>
+  return (<div style={{ paddingTop: 16 }}><Tt>{monthName(st.cycleStart)} Matches</Tt>
     {bP.length > 0 && <div><SecHdr k="bp" label={"Box — Pending (" + bP.length + ")"} />{!col["bp"] && bP.map(m => rm(m, "boxMatches", "BOX", P.orange))}</div>}
     {wP.length > 0 && <div><SecHdr k="wp" label={"Wild Cards — Pending (" + wP.length + ")"} />{!col["wp"] && wP.map(m => rm(m, "wildCards", "WILD CARD", "#C4A1FF"))}</div>}
     {oP.length > 0 && <div><SecHdr k="op" label={"Open — Pending (" + oP.length + ")"} />{!col["op"] && oP.map(m => rm(m, "openChallenges", "OPEN", P.blue))}</div>}
@@ -596,14 +598,14 @@ function AdminV({ st, ladder, startCyc, undoCyc, resetAll, addP, rmP, ffM, gn })
         </div>))}</div></div>
 
     <div style={gc}><h4 style={{ fontSize: 15, fontWeight: 600, color: P.white, marginBottom: 6, fontFamily: "Georgia,serif" }}>Cycles</h4>
-      <p style={{ fontSize: 12, color: P.grey, marginBottom: 10 }}>{!st.cycleNumber ? "No cycle." : "Cycle " + st.cycleNumber + ". " + pend + " pending. " + st.checkedIn.length + " checked in."}</p>
+      <p style={{ fontSize: 12, color: P.grey, marginBottom: 10 }}>{!st.cycleNumber ? "No active month." : monthName(st.cycleStart) + ". " + pend + " pending. " + st.checkedIn.length + " checked in."}</p>
       {st.checkedIn.length < 4 ? <p style={{ fontSize: 11, color: P.bad }}>Need 4+ ({st.checkedIn.length})</p>
-        : cc ? <div>{pend > 0 && <p style={{ fontSize: 11, color: P.bad, marginBottom: 6 }}>{pend} auto-forfeit</p>}<button onClick={() => { startCyc(); setCc(false); }} style={bpS}>Start Cycle {st.cycleNumber + 1}</button><button onClick={() => setCc(false)} style={bcS}>Cancel</button></div>
-        : <button onClick={() => setCc(true)} style={bpS}>{!st.cycleNumber ? "Start Cycle 1" : "Start Cycle " + (st.cycleNumber + 1)}</button>}</div>
+        : cc ? <div>{pend > 0 && <p style={{ fontSize: 11, color: P.bad, marginBottom: 6 }}>{pend} auto-forfeit</p>}<button onClick={() => { startCyc(); setCc(false); }} style={bpS}>Start {curMonth()}</button><button onClick={() => setCc(false)} style={bcS}>Cancel</button></div>
+        : <button onClick={() => setCc(true)} style={bpS}>Start {curMonth()}</button>}</div>
 
     {st.cycleNumber > 0 && <div style={gc}><h4 style={{ fontSize: 15, fontWeight: 600, color: P.white, marginBottom: 6, fontFamily: "Georgia,serif" }}>Undo</h4>
-      {cu ? <div><p style={{ fontSize: 11, color: P.bad, marginBottom: 6 }}>Delete Cycle {st.cycleNumber}?</p><button onClick={() => { undoCyc(); setCu(false); }} style={{ ...bpS, background: P.amber, color: P.navy }}>Yes</button><button onClick={() => setCu(false)} style={bcS}>Cancel</button></div>
-        : <button onClick={() => setCu(true)} style={{ ...bpS, background: "transparent", border: "1px solid " + P.amber, color: P.amber }}>Undo Cycle {st.cycleNumber}</button>}</div>}
+      {cu ? <div><p style={{ fontSize: 11, color: P.bad, marginBottom: 6 }}>Delete {monthName(st.cycleStart)}?</p><button onClick={() => { undoCyc(); setCu(false); }} style={{ ...bpS, background: P.amber, color: P.navy }}>Yes</button><button onClick={() => setCu(false)} style={bcS}>Cancel</button></div>
+        : <button onClick={() => setCu(true)} style={{ ...bpS, background: "transparent", border: "1px solid " + P.amber, color: P.amber }}>Undo {monthName(st.cycleStart)}</button>}</div>}
 
     {overdueMatches.length > 0 && (
       <div style={gc}>
