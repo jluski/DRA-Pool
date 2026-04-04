@@ -545,8 +545,9 @@ function AdminV({ st, ladder, startCyc, undoCyc, resetAll, addP, rmP, ffM, gn })
   const filtLad = search.trim() ? ladder.filter(s => s.name.toLowerCase().includes(search.toLowerCase())) : ladder;
 
   if (!ok) return (<div style={{ paddingTop: 16 }}><Tt>Admin</Tt>
-    <div style={gc}><h4 style={{ fontSize: 15, fontWeight: 600, color: P.white, marginBottom: 6, fontFamily: "Georgia,serif" }}>Enter PIN</h4>
-      <div style={{ display: "flex", gap: 8 }}><input type="password" inputMode="numeric" maxLength={4} value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, ""))} onKeyDown={e => { if (e.key === "Enter") chk(); }} placeholder="PIN" style={{ ...inpS, textAlign: "center", fontSize: 20, letterSpacing: 8 }} /><button onClick={chk} style={{ padding: "10px 20px", background: "linear-gradient(135deg," + P.orange + "," + P.amber + ")", color: P.navy, border: "none", borderRadius: 10, fontWeight: 700, cursor: "pointer" }}>Unlock</button></div>
+    <div style={gc}><h4 style={{ fontSize: 15, fontWeight: 600, color: P.white, marginBottom: 10, fontFamily: "Georgia,serif" }}>Enter PIN</h4>
+      <input type="password" inputMode="numeric" maxLength={4} value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, ""))} onKeyDown={e => { if (e.key === "Enter") chk(); }} placeholder="· · · ·" style={{ ...inpS, width: "100%", textAlign: "center", fontSize: 28, letterSpacing: 12, marginBottom: 10 }} />
+      <button onClick={chk} style={{ ...bpS, marginTop: 0 }}>Unlock</button>
       {err && <p style={{ fontSize: 11, color: P.bad, marginTop: 8, textAlign: "center" }}>Wrong PIN.</p>}</div>
     <div style={gc}><h4 style={{ fontSize: 15, fontWeight: 600, color: P.white, marginBottom: 10, fontFamily: "Georgia,serif" }}>Stats</h4>
       <div style={{ display: "flex", gap: 8 }}>{[[st.players.length, "Players"], [st.cycleNumber, "Cycles"], [tot, "Matches"]].map(([n, l]) => (<div key={l} style={{ flex: 1, background: "rgba(0,20,40,.5)", borderRadius: 10, padding: "14px 6px", textAlign: "center", border: "1px solid " + P.gb }}><div style={{ fontSize: 26, fontWeight: 300, color: P.orange, fontFamily: "Georgia,serif" }}>{n}</div><div style={{ fontSize: 9, color: P.dim, letterSpacing: 2, textTransform: "uppercase", marginTop: 2 }}>{l}</div></div>))}</div></div>
