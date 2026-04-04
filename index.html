@@ -361,7 +361,7 @@ function Home({ st, ladder, gn, ini, cd }) {
             <div key={bi} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottom: bi < boxSummaries.length - 1 ? "1px solid rgba(21,152,203,.08)" : "none" }}>
               <span style={{ fontSize: 9, fontWeight: 700, color: box.isSwing ? P.blue : P.orange, width: 52, letterSpacing: 1 }}>{box.name.toUpperCase()}</span>
               <span style={{ flex: 1, fontSize: 12, color: complete ? P.ok : P.off }}>
-                {complete ? "\u2713 " + (bs[0] ? gn(bs[0].id) : "—") : (bs[0] ? gn(bs[0].id) + " leads" : "No matches yet")}
+                {complete ? "\u2713 " + (bs[0] ? gn(bs[0].id) : "—") : done > 0 ? (bs[0] ? gn(bs[0].id) + " leads" : "—") : "No matches yet"}
               </span>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <div style={{ width: 48, height: 4, borderRadius: 2, background: "rgba(255,255,255,.1)", overflow: "hidden" }}>
