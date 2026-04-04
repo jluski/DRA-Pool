@@ -205,7 +205,6 @@ function App() {
   const ladder = st ? calcLad(st.players, st) : [];
   const activeIds = st ? new Set([...(st.boxes || []).flatMap(b => b.players), ...(st.openChallenges || []).filter(m => m.completed).flatMap(m => [m.player1, m.player2]), ...(st.boxMatches || []).filter(m => m.completed).flatMap(m => [m.player1, m.player2]), ...(st.wildCards || []).filter(m => m.completed).flatMap(m => [m.player1, m.player2])]) : new Set();
   const activeLad = ladder.filter(s => activeIds.has(s.id));
-  const rankChanges = st ? getRankChanges(ladder, st, st.players) : {};
   const gn = (id) => { if (!st) return "?"; const p = st.players.find(x => x.id === id); return p ? p.name : "?"; };
   const ini = (id) => gn(id).split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 3);
   const boxWinners = st ? getBoxWinners(st, gn) : [];
@@ -281,7 +280,7 @@ function App() {
         <span style={{ fontSize: 11, color: P.grey }}>{activeLad.length} active</span>
       </div>}
       <main style={{ maxWidth: 600, margin: "0 auto", padding: "0 14px 110px", animation: "fadeIn .3s", position: "relative", zIndex: 1 }}>
-        {view === "home" && <Home st={st} ladder={activeLad} gn={gn} ini={ini} cd={cd} rankChanges={rankChanges} />}
+        {view === "home" && <Home st={st} ladder={activeLad} gn={gn} ini={ini} cd={cd} />}
         {view === "boxes" && <BoxesV st={st} gn={gn} ini={ini} />}
         {view === "matches" && <MatchesV st={st} gn={gn} logR={logR} ffM={ffM} />}
         {view === "challenge" && <ChallengeV players={st.players} newOC={newOC} />}
@@ -310,7 +309,7 @@ function App() {
 }
 
 // ─── HOME ────────────────────────────────────────────────────
-function Home({ st, ladder, gn, ini, cd, rankChanges }) {
+function Home({ st, ladder, gn, ini, cd }) {
   const [exp, setExp] = useState(null);
   const [activeOnly, setActiveOnly] = useState(false);
   const [showChampHistory, setShowChampHistory] = useState(false);
@@ -420,13 +419,12 @@ function Home({ st, ladder, gn, ini, cd, rankChanges }) {
           </div>
           <div style={gt}>
             <div style={{ display: "flex", padding: "9px 10px", background: "rgba(0,48,82,.5)", gap: 4 }}>
-              {[["#", 22], ["", 22], ["Player", 0], ["Tot", 28], ["Box", 28], ["Opn", 28], ["W", 22], ["L", 22]].map(([l, w]) => <span key={l + w} style={{ ...ths, width: w || undefined, flex: w ? undefined : 1 }}>{l}</span>)}
+              {[["#", 22], ["Player", 0], ["Tot", 28], ["Box", 28], ["Opn", 28], ["W", 22], ["L", 22]].map(([l, w]) => <span key={l + w} style={{ ...ths, width: w || undefined, flex: w ? undefined : 1 }}>{l}</span>)}
             </div>
             {displayLad.map((s, i) => (
               <div key={s.id}>
                 <div onClick={() => setExp(exp === s.id ? null : s.id)} style={{ display: "flex", padding: "9px 10px", gap: 4, borderBottom: exp === s.id ? "none" : "1px solid rgba(21,152,203,.08)", background: i === 0 ? "rgba(241,138,0,.12)" : i % 2 === 0 ? "rgba(0,48,79,.2)" : "transparent", borderLeft: i === 0 ? "3px solid " + P.orange : "3px solid transparent", cursor: "pointer" }}>
                   <span style={{ width: 22, fontWeight: 700, fontSize: 12, color: i === 0 ? P.orange : i < 3 ? P.blue : P.dim }}>{i === 0 ? "\ud83d\udc51" : i + 1}</span>
-                  <span style={{ width: 22 }}><RankBadge change={rankChanges[s.id]} /></span>
                   <span style={{ flex: 1, fontWeight: i < 3 ? 600 : 400, fontSize: 12 }}>{s.name}<StreakBadge streak={s.streak} /></span>
                   <span style={{ width: 28, fontWeight: 700, color: P.orange, fontSize: 12 }}>{s.points}</span>
                   <span style={{ width: 28, color: P.amber, fontSize: 11 }}>{s.boxPts}</span>
@@ -448,43 +446,10 @@ function Home({ st, ladder, gn, ini, cd, rankChanges }) {
             ))}
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
-            {[[P.ok, "\u25b2 Up"], [P.bad, "\u25bc Down"], [P.orange, "Total"], [P.amber, "Box"], [P.blue, "Open"], ["", "\ud83d\udd25 Streak"]].map(([c, t]) => <span key={t} style={{ fontSize: 9, color: P.grey, display: "flex", alignItems: "center", gap: 3 }}>{c && <span style={{ width: 6, height: 6, borderRadius: "50%", background: c }} />}{t}</span>)}
+            {[[P.orange, "Total"], [P.amber, "Box"], [P.blue, "Open"], ["", "\ud83d\udd25 Streak"]].map(([c, t]) => <span key={t} style={{ fontSize: 9, color: P.grey, display: "flex", alignItems: "center", gap: 3 }}>{c && <span style={{ width: 6, height: 6, borderRadius: "50%", background: c }} />}{t}</span>)}
           </div>
         </div>
       )}
-
-      {st.cycleNumber > 0 && st.boxes && st.boxes.map((box, bi) => {
-        const bm = st.boxMatches.filter(m => m.box === bi); const bs = boxSt(box.players, bm); const pids = bs.map(s => s.id);
-        return (
-          <div key={bi} style={{ marginTop: bi === 0 ? 16 : 10 }}>
-            {bi === 0 && <Sub>BOXES</Sub>}
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 2, color: box.isSwing ? P.blue : P.orange }}>{box.name.toUpperCase()}</span>
-            </div>
-            <div style={{ ...gc, padding: 0, overflow: "hidden" }}>
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ borderCollapse: "collapse", width: "100%", minWidth: pids.length * 48 + 120 }}>
-                  <thead><tr><th style={{ ...gth, textAlign: "left", minWidth: 75 }}>Player</th><th style={{ ...gth, width: 32 }}>Pts</th>{pids.map(id => <th key={id} style={{ ...gth, width: 44 }}>{ini(id)}</th>)}</tr></thead>
-                  <tbody>{pids.map((pid, ri) => (
-                    <tr key={pid}>
-                      <td style={{ ...gtd, textAlign: "left", fontWeight: 600, fontSize: 11 }}>{gn(pid)}</td>
-                      <td style={{ ...gtd, fontWeight: 700, color: P.orange }}>{bs[ri] ? bs[ri].pts : 0}</td>
-                      {pids.map(oid => {
-                        if (pid === oid) return <td key={oid} style={{ ...gtd, background: "rgba(0,48,82,.4)" }} />;
-                        const sc = getS(bm, pid, oid);
-                        if (!sc) return <td key={oid} style={{ ...gtd, color: P.dim }}>{"—"}</td>;
-                        if (sc.pending) return <td key={oid} style={{ ...gtd, background: "rgba(241,138,0,.12)" }}><span style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", background: P.orange, animation: "pulse 1.8s infinite" }} /></td>;
-                        if (sc.s1 === 0 && sc.s2 === 0) return <td key={oid} style={{ ...gtd, color: P.dim, fontSize: 10, fontStyle: "italic" }}>FF</td>;
-                        const w = sc.s1 > sc.s2;
-                        return <td key={oid} style={{ ...gtd, fontWeight: 700, color: w ? P.ok : P.bad, background: w ? "rgba(52,211,153,.08)" : "rgba(248,113,113,.06)" }}>{sc.s1}-{sc.s2}</td>;
-                      })}
-                    </tr>))}</tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        );
-      })}
 
       {last5.length > 0 && <div style={{ marginTop: 12 }}><Sub>RECENT OPEN CHALLENGES</Sub><div style={{ ...gc, padding: 0, overflow: "hidden" }}>{last5.map(m => (<div key={m.id} style={{ display: "flex", alignItems: "center", padding: "8px 12px", borderBottom: "1px solid rgba(21,152,203,.06)" }}><span style={{ flex: 1, fontSize: 12, fontWeight: m.score1 > m.score2 ? 700 : 400, textAlign: "right", paddingRight: 8, color: m.score1 > m.score2 ? P.ok : P.off }}>{gn(m.player1)}</span><span style={{ fontSize: 13, fontWeight: 700, color: P.blue, width: 44, textAlign: "center" }}>{m.score1}-{m.score2}</span><span style={{ flex: 1, fontSize: 12, fontWeight: m.score2 > m.score1 ? 700 : 400, paddingLeft: 8, color: m.score2 > m.score1 ? P.ok : P.off }}>{gn(m.player2)}</span></div>))}</div></div>}
 
