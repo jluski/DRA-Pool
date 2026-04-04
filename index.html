@@ -220,6 +220,7 @@ function App() {
   const selAll = () => { save({ ...st, checkedIn: st.players.map(p => p.id) }); flash("All checked in!"); };
   const deselAll = () => { save({ ...st, checkedIn: [] }); flash("All unchecked"); };
   const selLast = () => { const lb = st.boxes.length ? st.boxes : (st.pastCycles.length ? st.pastCycles[st.pastCycles.length - 1].boxes : []); if (!lb || !lb.length) { flash("No previous cycle"); return; } const ids = [...new Set(lb.flatMap(b => b.players))].filter(id => st.players.some(p => p.id === id)); save({ ...st, checkedIn: ids }); flash(ids.length + " from last cycle!"); };
+  const selBox = (boxPlayers) => { const ids = boxPlayers.filter(id => st.players.some(p => p.id === id)); save({ ...st, checkedIn: [...new Set([...st.checkedIn, ...ids])] }); flash(ids.length + " checked in!"); };
   const startCyc = () => {
     if (st.checkedIn.length < 4) { flash("Need 4+"); return; }
     const bon = [], pen = [];
@@ -276,7 +277,7 @@ function App() {
         {view === "boxes" && <BoxesV st={st} gn={gn} ini={ini} />}
         {view === "matches" && <MatchesV st={st} gn={gn} logR={logR} ffM={ffM} />}
         {view === "challenge" && <ChallengeV players={st.players} newOC={newOC} />}
-        {view === "checkin" && <CheckInV st={st} ladder={ladder} togCI={togCI} selAll={selAll} deselAll={deselAll} selLast={selLast} />}
+        {view === "checkin" && <CheckInV st={st} ladder={ladder} togCI={togCI} selAll={selAll} deselAll={deselAll} selLast={selLast} selBox={selBox} />}
         {view === "admin" && <AdminV st={st} ladder={ladder} startCyc={startCyc} undoCyc={undoCyc} resetAll={resetAll} addP={addP} rmP={rmP} ffM={ffM} gn={gn} />}
       </main>
       <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 10, padding: "0 14px", paddingBottom: "max(10px, env(safe-area-inset-bottom))" }}>
@@ -303,6 +304,8 @@ function App() {
 // ─── HOME ────────────────────────────────────────────────────
 function Home({ st, ladder, gn, ini, cd, rankChanges, champions, boxWinners }) {
   const [exp, setExp] = useState(null);
+  const [activeOnly, setActiveOnly] = useState(false);
+  const displayLad = activeOnly ? ladder.filter(s => !s.inactive) : ladder;
   const last5 = (st.openChallenges || []).filter(m => m.completed).slice(-5).reverse();
   const getS = (bm, p1, p2) => { const m = bm.find(m => (m.player1 === p1 && m.player2 === p2) || (m.player1 === p2 && m.player2 === p1)); if (!m) return null; if (!m.completed) return { pending: true }; return { s1: m.player1 === p1 ? m.score1 : m.score2, s2: m.player1 === p1 ? m.score2 : m.score1 }; };
   return (
@@ -348,12 +351,15 @@ function Home({ st, ladder, gn, ini, cd, rankChanges, champions, boxWinners }) {
 
       {st.cycleNumber > 0 && ladder.length > 0 && (
         <div>
-          <Sub>STANDINGS</Sub>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <Sub>STANDINGS</Sub>
+            <button onClick={() => setActiveOnly(v => !v)} style={{ fontSize: 9, fontWeight: 700, padding: "3px 10px", borderRadius: 10, background: activeOnly ? P.orange : "transparent", border: "1px solid " + (activeOnly ? P.orange : P.dim), color: activeOnly ? P.navy : P.dim, cursor: "pointer", marginBottom: 8 }}>Active Only</button>
+          </div>
           <div style={gt}>
             <div style={{ display: "flex", padding: "9px 10px", background: "rgba(0,48,82,.5)", gap: 4 }}>
               {[["#", 22], ["", 22], ["Player", 0], ["Tot", 28], ["Box", 28], ["Opn", 28], ["W", 22], ["L", 22]].map(([l, w]) => <span key={l + w} style={{ ...ths, width: w || undefined, flex: w ? undefined : 1 }}>{l}</span>)}
             </div>
-            {ladder.map((s, i) => (
+            {displayLad.map((s, i) => (
               <div key={s.id}>
                 <div onClick={() => setExp(exp === s.id ? null : s.id)} style={{ display: "flex", padding: "9px 10px", gap: 4, borderBottom: exp === s.id ? "none" : "1px solid rgba(21,152,203,.08)", background: i === 0 ? "rgba(241,138,0,.12)" : i % 2 === 0 ? "rgba(0,48,79,.2)" : "transparent", borderLeft: i === 0 ? "3px solid " + P.orange : "3px solid transparent", cursor: "pointer" }}>
                   <span style={{ width: 22, fontWeight: 700, fontSize: 12, color: i === 0 ? P.orange : i < 3 ? P.blue : P.dim }}>{i === 0 ? "\ud83d\udc51" : i + 1}</span>
@@ -538,25 +544,71 @@ function ChallengeV({ players, newOC }) {
   </div>);
 }
 
-// ─── CHECK IN (with search) ─────────────────────────────────
-function CheckInV({ st, ladder, togCI, selAll, deselAll, selLast }) {
+// ─── CHECK IN ───────────────────────────────────────────────
+function CheckInV({ st, ladder, togCI, selAll, deselAll, selLast, selBox }) {
   const [search, setSearch] = useState("");
+  const [showPlaying, setShowPlaying] = useState(true);
+  const [showJoin, setShowJoin] = useState(true);
   const allCk = st.checkedIn.length === st.players.length && st.players.length > 0;
-  const filtered = search.trim() ? ladder.filter(s => s.name.toLowerCase().includes(search.toLowerCase())) : ladder;
-  return (<div style={{ paddingTop: 16 }}><Tt>Check In</Tt>
-    <p style={{ fontSize: 12, color: P.grey, marginBottom: 8 }}>{st.checkedIn.length} of {st.players.length} checked in.</p>
-    <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search players..." style={{ ...inpS, width: "100%", marginBottom: 10, flex: "none" }} />
-    <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
-      <button onClick={allCk ? deselAll : selAll} style={{ padding: "7px 14px", background: P.glass, border: "1px solid " + P.gb, borderRadius: 8, color: allCk ? P.bad : P.ok, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>{allCk ? "Deselect All" : "Select All"}</button>
-      <button onClick={selLast} style={{ padding: "7px 14px", background: P.glass, border: "1px solid " + P.gb, borderRadius: 8, color: P.blue, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Last Cycle</button>
+  const playing = ladder.filter(s => st.checkedIn.includes(s.id));
+  const notPlaying = ladder.filter(s => !st.checkedIn.includes(s.id));
+  const filtered = search.trim() ? notPlaying.filter(s => s.name.toLowerCase().includes(search.toLowerCase())) : notPlaying;
+  const lastBoxes = st.boxes && st.boxes.length ? st.boxes : (st.pastCycles && st.pastCycles.length ? st.pastCycles[st.pastCycles.length - 1].boxes || [] : []);
+
+  const secBtn = (label, show, onToggle) => (
+    <div onClick={onToggle} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 0 6px", cursor: "pointer", userSelect: "none" }}>
+      <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 2, color: P.dim }}>{show ? "\u25bc" : "\u25b6"}</span>
+      <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 2, color: P.dim, textTransform: "uppercase" }}>{label}</span>
+      <div style={{ flex: 1, height: 1, background: P.gb }} />
     </div>
-    {filtered.map((s) => { const ck = st.checkedIn.includes(s.id); return (
-      <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 4px", borderBottom: "1px solid rgba(21,152,203,.06)" }}>
-        <button onClick={() => togCI(s.id)} style={{ width: 26, height: 26, borderRadius: 8, border: "2px solid " + (ck ? P.ok : P.dim), background: ck ? P.ok : "transparent", color: ck ? P.white : "transparent", fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>{ck ? "\u2713" : ""}</button>
-        <span style={{ flex: 1, fontSize: 14 }}>{s.name}</span>
-        <span style={{ fontSize: 11, color: P.dim }}>{s.points}pts</span>
-      </div>); })}
-    {filtered.length === 0 && search && <p style={{ color: P.dim, fontSize: 12, padding: 16, textAlign: "center" }}>No matches for "{search}"</p>}
+  );
+
+  return (<div style={{ paddingTop: 16 }}>
+    <Tt>{monthName(st.cycleStart) || "Sign-Up"}</Tt>
+    <p style={{ fontSize: 12, color: P.grey, marginBottom: 10 }}>{st.checkedIn.length} of {st.players.length} players in</p>
+
+    {/* Quick Actions */}
+    <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
+      <button onClick={allCk ? deselAll : selAll} style={{ padding: "6px 12px", background: P.glass, border: "1px solid " + P.gb, borderRadius: 8, color: allCk ? P.bad : P.ok, fontSize: 10, fontWeight: 700, cursor: "pointer" }}>{allCk ? "Deselect All" : "Select All"}</button>
+      <button onClick={selLast} style={{ padding: "6px 12px", background: P.glass, border: "1px solid " + P.gb, borderRadius: 8, color: P.blue, fontSize: 10, fontWeight: 700, cursor: "pointer" }}>Last Cycle</button>
+    </div>
+
+    {/* Playing This Month */}
+    {secBtn("Playing This Month (" + playing.length + ")", showPlaying, () => setShowPlaying(v => !v))}
+    {showPlaying && (
+      <div style={gc}>
+        {playing.length === 0 && <p style={{ fontSize: 12, color: P.dim, textAlign: "center", padding: "8px 0" }}>No one signed up yet.</p>}
+        {playing.map(s => (
+          <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 4px", borderBottom: "1px solid rgba(21,152,203,.06)" }}>
+            <span style={{ flex: 1, fontSize: 13 }}>{s.name}</span>
+            <button onClick={() => togCI(s.id)} style={{ padding: "4px 12px", background: "transparent", border: "1px solid " + P.bad, borderRadius: 8, color: P.bad, fontSize: 10, fontWeight: 700, cursor: "pointer" }}>Leave</button>
+          </div>
+        ))}
+      </div>
+    )}
+
+    {/* Join the Game */}
+    {secBtn("Join the Game (" + notPlaying.length + ")", showJoin, () => setShowJoin(v => !v))}
+    {showJoin && (
+      <div style={gc}>
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search players..." style={{ ...inpS, width: "100%", marginBottom: lastBoxes.length ? 10 : 4, flex: "none" }} />
+        {lastBoxes.length > 0 && (
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+            {lastBoxes.map((box, i) => (
+              <button key={i} onClick={() => selBox(box.players)} style={{ padding: "5px 12px", background: P.glass, border: "1px solid " + P.gb, borderRadius: 8, color: box.isSwing ? P.blue : P.orange, fontSize: 10, fontWeight: 700, cursor: "pointer" }}>+ {box.name}</button>
+            ))}
+          </div>
+        )}
+        {filtered.map(s => (
+          <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 4px", borderBottom: "1px solid rgba(21,152,203,.06)" }}>
+            <span style={{ flex: 1, fontSize: 13 }}>{s.name}</span>
+            <button onClick={() => togCI(s.id)} style={{ padding: "4px 12px", background: "linear-gradient(135deg," + P.orange + "," + P.amber + ")", border: "none", borderRadius: 8, color: P.navy, fontSize: 10, fontWeight: 700, cursor: "pointer" }}>Join</button>
+          </div>
+        ))}
+        {filtered.length === 0 && search && <p style={{ color: P.dim, fontSize: 12, padding: "8px 0", textAlign: "center" }}>No matches for "{search}"</p>}
+        {filtered.length === 0 && !search && <p style={{ fontSize: 12, color: P.dim, textAlign: "center", padding: "8px 0" }}>Everyone is already in!</p>}
+      </div>
+    )}
   </div>);
 }
 
@@ -565,6 +617,7 @@ function AdminV({ st, ladder, startCyc, undoCyc, resetAll, addP, rmP, ffM, gn })
   const [pin, setPin] = useState(""); const [ok, setOk] = useState(false); const [err, setErr] = useState(false);
   const [cc, setCc] = useState(false); const [cr, setCr] = useState(false); const [cu, setCu] = useState(false);
   const [nm, setNm] = useState(""); const [rmId, setRmId] = useState(null); const [search, setSearch] = useState("");
+  const [showPlayers, setShowPlayers] = useState(true);
   const daysInCycle = st.cycleStart ? dd(nw(), st.cycleStart) : 0;
   const overdueMatches = daysInCycle >= 7 ? [
     ...(st.boxMatches || []).filter(m => !m.completed).map(m => ({ ...m, matchType: "Box", label: m.boxName || "Box" })),
@@ -586,16 +639,23 @@ function AdminV({ st, ladder, startCyc, undoCyc, resetAll, addP, rmP, ffM, gn })
   </div>);
 
   return (<div style={{ paddingTop: 16 }}><Tt>Admin <span style={{ fontSize: 11, color: P.ok }}>{"\ud83d\udd13"}</span></Tt>
-    <div style={gc}><h4 style={{ fontSize: 15, fontWeight: 600, color: P.white, marginBottom: 8, fontFamily: "Georgia,serif" }}>Players ({st.players.length})</h4>
-      <div style={{ display: "flex", gap: 6, marginBottom: 8 }}><input value={nm} onChange={e => setNm(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && nm.trim()) { addP(nm); setNm(""); } }} placeholder="New player..." style={inpS} /><button onClick={() => { if (nm.trim()) { addP(nm); setNm(""); } }} style={{ padding: "10px 18px", background: "linear-gradient(135deg," + P.orange + "," + P.amber + ")", color: P.navy, border: "none", borderRadius: 10, fontWeight: 700, cursor: "pointer" }}>Add</button></div>
-      <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search..." style={{ ...inpS, width: "100%", marginBottom: 8, flex: "none", fontSize: 12 }} />
-      <div style={{ maxHeight: 250, overflowY: "auto" }}>{filtLad.map((s, i) => (
-        <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 4px", borderBottom: "1px solid rgba(21,152,203,.06)" }}>
-          <span style={{ fontSize: 11, color: P.orange, fontWeight: 700, width: 24 }}>#{ladder.indexOf(s) + 1}</span>
-          <span style={{ flex: 1, fontSize: 13 }}>{s.name}</span>
-          <span style={{ fontSize: 10, color: P.dim }}>{s.points}pts</span>
-          {rmId === s.id ? (<div style={{ display: "flex", gap: 3 }}><button onClick={() => { rmP(s.id); setRmId(null); }} style={{ padding: "3px 8px", background: P.bad, color: "#fff", border: "none", borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: "pointer" }}>Remove</button><button onClick={() => setRmId(null)} style={{ padding: "3px 8px", background: P.mid, color: P.grey, border: "none", borderRadius: 6, fontSize: 10, cursor: "pointer" }}>Keep</button></div>) : <button onClick={() => setRmId(s.id)} style={{ background: "transparent", border: "none", color: P.dim, fontSize: 16, cursor: "pointer" }}>{"\u00d7"}</button>}
-        </div>))}</div></div>
+    <div style={gc}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: showPlayers ? 8 : 0 }}>
+        <h4 style={{ fontSize: 15, fontWeight: 600, color: P.white, fontFamily: "Georgia,serif" }}>Players ({st.players.length})</h4>
+        <button onClick={() => setShowPlayers(v => !v)} style={{ background: "none", border: "none", color: P.dim, fontSize: 14, cursor: "pointer" }}>{showPlayers ? "\u25bc" : "\u25b6"}</button>
+      </div>
+      {showPlayers && <div>
+        <div style={{ display: "flex", gap: 6, marginBottom: 8 }}><input value={nm} onChange={e => setNm(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && nm.trim()) { addP(nm); setNm(""); } }} placeholder="New player..." style={inpS} /><button onClick={() => { if (nm.trim()) { addP(nm); setNm(""); } }} style={{ padding: "10px 18px", background: "linear-gradient(135deg," + P.orange + "," + P.amber + ")", color: P.navy, border: "none", borderRadius: 10, fontWeight: 700, cursor: "pointer" }}>Add</button></div>
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search..." style={{ ...inpS, width: "100%", marginBottom: 8, flex: "none", fontSize: 12 }} />
+        <div style={{ maxHeight: 250, overflowY: "auto" }}>{filtLad.map((s, i) => (
+          <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 4px", borderBottom: "1px solid rgba(21,152,203,.06)" }}>
+            <span style={{ fontSize: 11, color: P.orange, fontWeight: 700, width: 24 }}>#{ladder.indexOf(s) + 1}</span>
+            <span style={{ flex: 1, fontSize: 13 }}>{s.name}</span>
+            <span style={{ fontSize: 10, color: P.dim }}>{s.points}pts</span>
+            {rmId === s.id ? (<div style={{ display: "flex", gap: 3 }}><button onClick={() => { rmP(s.id); setRmId(null); }} style={{ padding: "3px 8px", background: P.bad, color: "#fff", border: "none", borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: "pointer" }}>Remove</button><button onClick={() => setRmId(null)} style={{ padding: "3px 8px", background: P.mid, color: P.grey, border: "none", borderRadius: 6, fontSize: 10, cursor: "pointer" }}>Keep</button></div>) : <button onClick={() => setRmId(s.id)} style={{ background: "transparent", border: "none", color: P.dim, fontSize: 16, cursor: "pointer" }}>{"\u00d7"}</button>}
+          </div>))}</div>
+      </div>}
+    </div>
 
     <div style={gc}><h4 style={{ fontSize: 15, fontWeight: 600, color: P.white, marginBottom: 6, fontFamily: "Georgia,serif" }}>Cycles</h4>
       <p style={{ fontSize: 12, color: P.grey, marginBottom: 10 }}>{!st.cycleNumber ? "No active month." : monthName(st.cycleStart) + ". " + pend + " pending. " + st.checkedIn.length + " checked in."}</p>
