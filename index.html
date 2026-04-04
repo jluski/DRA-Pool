@@ -208,7 +208,6 @@ function App() {
   const rankChanges = st ? getRankChanges(ladder, st, st.players) : {};
   const gn = (id) => { if (!st) return "?"; const p = st.players.find(x => x.id === id); return p ? p.name : "?"; };
   const ini = (id) => gn(id).split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 3);
-  const champions = st ? getChampions(st, gn) : [];
   const boxWinners = st ? getBoxWinners(st, gn) : [];
 
   if (!st) return <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: P.navy }}><div style={{ width: 36, height: 36, border: "2px solid " + P.mid, borderTop: "2px solid " + P.orange, borderRadius: "50%", animation: "spin .7s linear infinite" }} /><style>{"@keyframes spin{to{transform:rotate(360deg)}}"}</style></div>;
@@ -282,7 +281,7 @@ function App() {
         <span style={{ fontSize: 11, color: P.grey }}>{activeLad.length} active</span>
       </div>}
       <main style={{ maxWidth: 600, margin: "0 auto", padding: "0 14px 110px", animation: "fadeIn .3s", position: "relative", zIndex: 1 }}>
-        {view === "home" && <Home st={st} ladder={activeLad} gn={gn} ini={ini} cd={cd} rankChanges={rankChanges} champions={champions} boxWinners={boxWinners} />}
+        {view === "home" && <Home st={st} ladder={activeLad} gn={gn} ini={ini} cd={cd} rankChanges={rankChanges} />}
         {view === "boxes" && <BoxesV st={st} gn={gn} ini={ini} />}
         {view === "matches" && <MatchesV st={st} gn={gn} logR={logR} ffM={ffM} />}
         {view === "challenge" && <ChallengeV players={st.players} newOC={newOC} />}
@@ -293,7 +292,7 @@ function App() {
         <nav style={{ display: "flex", justifyContent: "space-around", alignItems: "center", padding: "6px 4px", background: "rgba(255,255,255,.08)", backdropFilter: "blur(40px) saturate(200%)", WebkitBackdropFilter: "blur(40px) saturate(200%)", borderRadius: 28, border: "1px solid rgba(255,255,255,.18)", borderTop: "1px solid rgba(255,255,255,.28)", boxShadow: "0 8px 40px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.18)", position: "relative", marginBottom: 8, overflow: "hidden" }}>
           <div style={{ position: "absolute", left: `calc(${navIdx} * (100% / 6) + 3px)`, width: "calc(100% / 6 - 6px)", top: 4, bottom: 4, borderRadius: 22, background: "rgba(255,255,255,.13)", border: "1px solid rgba(255,255,255,.22)", boxShadow: "inset 0 1px 0 rgba(255,255,255,.3)", transition: "left .28s cubic-bezier(.34,1.56,.64,1)", pointerEvents: "none" }} />
           {tabs.map(([v, ic], i) => {
-            const label = v === "checkin" ? "Check In" : v;
+            const label = v === "checkin" ? "Players" : v;
             const isActive = view === v;
             const isTapped = tappedTab === i;
             return (
@@ -311,12 +310,32 @@ function App() {
 }
 
 // ─── HOME ────────────────────────────────────────────────────
-function Home({ st, ladder, gn, ini, cd, rankChanges, champions, boxWinners }) {
+function Home({ st, ladder, gn, ini, cd, rankChanges }) {
   const [exp, setExp] = useState(null);
   const [activeOnly, setActiveOnly] = useState(false);
+  const [showChampHistory, setShowChampHistory] = useState(false);
   const displayLad = activeOnly ? ladder.filter(s => !s.inactive) : ladder;
   const last5 = (st.openChallenges || []).filter(m => m.completed).slice(-5).reverse();
   const getS = (bm, p1, p2) => { const m = bm.find(m => (m.player1 === p1 && m.player2 === p2) || (m.player1 === p2 && m.player2 === p1)); if (!m) return null; if (!m.completed) return { pending: true }; return { s1: m.player1 === p1 ? m.score1 : m.score2, s2: m.player1 === p1 ? m.score2 : m.score1 }; };
+
+  // Last completed cycle champions (all box winners)
+  const lastCyc = st.pastCycles && st.pastCycles.length ? st.pastCycles[st.pastCycles.length - 1] : null;
+  const lastChamps = lastCyc
+    ? (lastCyc.boxes || []).map((box, bi) => { const bm = (lastCyc.boxMatches || []).filter(m => m.box === bi); const bs = boxSt(box.players, bm); return bs[0] ? { box: box.name, name: gn(bs[0].id), isSwing: box.isSwing } : null; }).filter(Boolean)
+    : [];
+
+  // Cycle progress summary
+  const boxSummaries = (st.boxes || []).map((box, bi) => {
+    const bm = (st.boxMatches || []).filter(m => m.box === bi);
+    const done = bm.filter(m => m.completed && !m.autoForfeit).length;
+    const total = bm.length;
+    const bs = boxSt(box.players, bm);
+    const complete = total > 0 && bm.every(m => m.completed);
+    return { box, bi, done, total, bs, complete };
+  });
+  const totalDone = (st.boxMatches || []).filter(m => m.completed && !m.autoForfeit).length + (st.wildCards || []).filter(m => m.completed && !m.autoForfeit).length;
+  const totalPend = (st.boxMatches || []).filter(m => !m.completed).length + (st.wildCards || []).filter(m => !m.completed).length;
+
   return (
     <div>
       <header style={{ textAlign: "center", padding: "20px 0 12px" }}>
@@ -331,28 +350,63 @@ function Home({ st, ladder, gn, ini, cd, rankChanges, champions, boxWinners }) {
         )}
       </header>
 
-      {/* Current Box Champions */}
-      {boxWinners.length > 0 && (
-        <div style={{ ...gc, padding: "12px 16px", background: "linear-gradient(135deg, rgba(241,138,0,.15), rgba(21,152,203,.1))", borderColor: P.orange }}>
-          <p style={{ fontSize: 9, color: P.orange, letterSpacing: 3, fontWeight: 700, marginBottom: 8, textAlign: "center" }}>CURRENT BOX CHAMPIONS</p>
-          {boxWinners.map((w, i) => (
-            <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "5px 0", borderBottom: i < boxWinners.length - 1 ? "1px solid rgba(21,152,203,.1)" : "none" }}>
-              <span style={{ fontSize: 10, color: w.isBox1 ? P.orange : P.blue, fontWeight: 700, width: 80 }}>{w.box}</span>
-              <span style={{ flex: 1, fontSize: 14, color: P.white, fontWeight: w.isBox1 ? 600 : 400, fontFamily: w.isBox1 ? "Georgia,serif" : "inherit" }}>{w.isBox1 ? "\ud83c\udfc6 " : "\ud83e\udd47 "}{w.name}</span>
+      {/* Cycle Progress — box-by-box summary */}
+      {st.cycleNumber > 0 && boxSummaries.length > 0 && (
+        <div style={{ ...gc, padding: "12px 16px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <p style={{ fontSize: 9, color: P.blue, letterSpacing: 3, fontWeight: 700 }}>CYCLE {st.cycleNumber} PROGRESS</p>
+            <span style={{ fontSize: 10, color: P.dim }}>{totalDone} played · {totalPend} pending</span>
+          </div>
+          {boxSummaries.map(({ box, bi, done, total, bs, complete }) => (
+            <div key={bi} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottom: bi < boxSummaries.length - 1 ? "1px solid rgba(21,152,203,.08)" : "none" }}>
+              <span style={{ fontSize: 9, fontWeight: 700, color: box.isSwing ? P.blue : P.orange, width: 52, letterSpacing: 1 }}>{box.name.toUpperCase()}</span>
+              <span style={{ flex: 1, fontSize: 12, color: complete ? P.ok : P.off }}>
+                {complete ? "\u2713 " + (bs[0] ? gn(bs[0].id) : "—") : (bs[0] ? gn(bs[0].id) + " leads" : "No matches yet")}
+              </span>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <div style={{ width: 48, height: 4, borderRadius: 2, background: "rgba(255,255,255,.1)", overflow: "hidden" }}>
+                  <div style={{ width: total > 0 ? (done / total * 100) + "%" : "0%", height: "100%", background: complete ? P.ok : P.orange, borderRadius: 2, transition: "width .3s" }} />
+                </div>
+                <span style={{ fontSize: 9, color: P.dim, width: 22, textAlign: "right" }}>{done}/{total}</span>
+              </div>
             </div>
           ))}
         </div>
       )}
 
-      {/* Past Champions (Box 1 winners) */}
-      {champions.length > 0 && (
-        <div style={{ marginBottom: 10 }}>
-          <p style={{ fontSize: 9, color: P.dim, letterSpacing: 2, fontWeight: 700, marginBottom: 4 }}>CHAMPION HISTORY</p>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            {[...champions].reverse().map((c, i) => (
-              <span key={i} style={{ fontSize: 9, color: c.current ? P.orange : P.dim, background: c.current ? "rgba(241,138,0,.15)" : "rgba(0,48,82,.3)", padding: "3px 8px", borderRadius: 6, border: c.current ? "1px solid rgba(241,138,0,.3)" : "none" }}>{"\ud83c\udfc6"} Cycle {c.cycle}: {c.name}</span>
-            ))}
+      {/* Last Period Champions */}
+      {lastChamps.length > 0 && (
+        <div style={{ ...gc, padding: "12px 16px", background: "linear-gradient(135deg, rgba(241,138,0,.12), rgba(21,152,203,.08))", borderColor: "rgba(241,138,0,.3)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <p style={{ fontSize: 9, color: P.orange, letterSpacing: 3, fontWeight: 700 }}>CYCLE {lastCyc.cycle} CHAMPIONS</p>
+            {st.pastCycles.length > 1 && (
+              <button onClick={() => setShowChampHistory(v => !v)} style={{ fontSize: 9, fontWeight: 700, padding: "3px 10px", borderRadius: 10, background: showChampHistory ? "rgba(241,138,0,.2)" : "transparent", border: "1px solid rgba(241,138,0,.4)", color: P.amber, cursor: "pointer" }}>
+                {"\ud83c\udfc6"} History {showChampHistory ? "▲" : "▼"}
+              </button>
+            )}
           </div>
+          {lastChamps.map((w, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 0", borderBottom: i < lastChamps.length - 1 ? "1px solid rgba(21,152,203,.08)" : "none" }}>
+              <span style={{ fontSize: 9, fontWeight: 700, color: w.isSwing ? P.blue : P.orange, width: 60 }}>{w.box}</span>
+              <span style={{ flex: 1, fontSize: 13, color: P.white, fontWeight: 600, fontFamily: "Georgia,serif" }}>{"\ud83e\udd47"} {w.name}</span>
+            </div>
+          ))}
+          {showChampHistory && (
+            <div style={{ marginTop: 12, borderTop: "1px solid rgba(21,152,203,.12)", paddingTop: 10 }}>
+              {[...st.pastCycles].reverse().map(c => {
+                const cChamps = (c.boxes || []).map((box, bi) => { const bm = (c.boxMatches || []).filter(m => m.box === bi); const bs = boxSt(box.players, bm); return bs[0] ? { box: box.name, name: gn(bs[0].id) } : null; }).filter(Boolean);
+                if (!cChamps.length) return null;
+                return (
+                  <div key={c.cycle} style={{ marginBottom: 10 }}>
+                    <p style={{ fontSize: 9, color: P.dim, fontWeight: 700, letterSpacing: 1, marginBottom: 4 }}>CYCLE {c.cycle} · {fmtDate(c.startedAt)}</p>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {cChamps.map((w, i) => <span key={i} style={{ fontSize: 10, color: P.off, background: "rgba(0,48,82,.4)", padding: "3px 8px", borderRadius: 6 }}>{"\ud83e\udd47"} {w.box}: {w.name}</span>)}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -556,58 +610,86 @@ function ChallengeV({ players, newOC }) {
 // ─── CHECK IN ───────────────────────────────────────────────
 function CheckInV({ st, ladder, togCI, selAll, deselAll, selLast }) {
   const [search, setSearch] = useState("");
-  const [showPlaying, setShowPlaying] = useState(true);
-  const [showJoin, setShowJoin] = useState(true);
+  const [showSignUp, setShowSignUp] = useState(true);
+  const [showRemaining, setShowRemaining] = useState(false);
   const allCk = st.checkedIn.length === st.players.length && st.players.length > 0;
+
+  // Playing This Period — players in the current active cycle
+  const currentIds = new Set((st.boxes || []).flatMap(b => b.players));
+  const currentPlayers = ladder.filter(s => currentIds.has(s.id));
+
+  // Sign Up for Next Period
   const playing = ladder.filter(s => st.checkedIn.includes(s.id));
   const notPlaying = ladder.filter(s => !st.checkedIn.includes(s.id));
+  const lastBoxes = st.boxes.length > 0 ? st.boxes : (st.pastCycles.length ? st.pastCycles[st.pastCycles.length - 1]?.boxes || [] : []);
+  const lastCycleIds = new Set(lastBoxes.flatMap(b => b.players));
+  const hasPrevCycle = lastBoxes.length > 0;
+  const newSignups = hasPrevCycle ? playing.filter(s => !lastCycleIds.has(s.id)) : [];
+  const returning = hasPrevCycle ? playing.filter(s => lastCycleIds.has(s.id)) : playing;
   const filtered = search.trim() ? notPlaying.filter(s => s.name.toLowerCase().includes(search.toLowerCase())) : notPlaying;
 
-  const secBtn = (label, show, onToggle) => (
+  const secBtn = (label, show, onToggle, count) => (
     <div onClick={onToggle} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 0 6px", cursor: "pointer", userSelect: "none" }}>
       <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 2, color: P.dim }}>{show ? "\u25bc" : "\u25b6"}</span>
       <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 2, color: P.dim, textTransform: "uppercase" }}>{label}</span>
+      {count !== undefined && <span style={{ fontSize: 10, color: P.grey }}>({count})</span>}
       <div style={{ flex: 1, height: 1, background: P.gb }} />
     </div>
   );
 
+  const playerRow = (s, action, actionLabel, actionStyle, badge) => (
+    <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 4px", borderBottom: "1px solid rgba(21,152,203,.06)" }}>
+      {badge && <span style={{ fontSize: 8, fontWeight: 700, color: P.orange, background: "rgba(241,138,0,.15)", border: "1px solid rgba(241,138,0,.3)", borderRadius: 4, padding: "1px 5px", letterSpacing: 1 }}>NEW</span>}
+      <span style={{ flex: 1, fontSize: 13 }}>{s.name}</span>
+      {action && <button onClick={() => action(s.id)} style={actionStyle}>{actionLabel}</button>}
+    </div>
+  );
+
+  const leaveBtn = { padding: "4px 12px", background: "transparent", border: "1px solid " + P.bad, borderRadius: 8, color: P.bad, fontSize: 10, fontWeight: 700, cursor: "pointer" };
+  const joinBtn = { padding: "4px 12px", background: "linear-gradient(135deg," + P.orange + "," + P.amber + ")", border: "none", borderRadius: 8, color: P.navy, fontSize: 10, fontWeight: 700, cursor: "pointer" };
+
   return (<div style={{ paddingTop: 16 }}>
-    <Tt>{st.cycleNumber > 0 ? "Cycle " + st.cycleNumber + " Sign-Up" : "Sign-Up"}</Tt>
-    <p style={{ fontSize: 12, color: P.grey, marginBottom: 10 }}>{st.checkedIn.length} of {st.players.length} players in</p>
+    <Tt>Players</Tt>
+    <p style={{ fontSize: 12, color: P.grey, marginBottom: 10 }}>{st.checkedIn.length} of {st.players.length} signed up for next period</p>
 
     {/* Quick Actions */}
     <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
       <button onClick={allCk ? deselAll : selAll} style={{ padding: "6px 12px", background: P.glass, border: "1px solid " + P.gb, borderRadius: 8, color: allCk ? P.bad : P.ok, fontSize: 10, fontWeight: 700, cursor: "pointer" }}>{allCk ? "Deselect All" : "Select All"}</button>
-      <button onClick={selLast} style={{ padding: "6px 12px", background: P.glass, border: "1px solid " + P.gb, borderRadius: 8, color: P.blue, fontSize: 10, fontWeight: 700, cursor: "pointer" }}>Last Cycle</button>
+      <button onClick={selLast} style={{ padding: "6px 12px", background: P.glass, border: "1px solid " + P.gb, borderRadius: 8, color: P.blue, fontSize: 10, fontWeight: 700, cursor: "pointer" }}>Last Period</button>
     </div>
 
-    {/* Playing This Month */}
-    {secBtn("Playing This Month (" + playing.length + ")", showPlaying, () => setShowPlaying(v => !v))}
-    {showPlaying && (
+    {/* Playing This Period — read-only */}
+    {st.cycleNumber > 0 && currentPlayers.length > 0 && (<>
+      {secBtn("Playing This Period", true, () => {}, currentPlayers.length)}
       <div style={gc}>
-        {playing.length === 0 && <p style={{ fontSize: 12, color: P.dim, textAlign: "center", padding: "8px 0" }}>No one signed up yet.</p>}
-        {playing.map(s => (
+        {currentPlayers.map(s => (
           <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 4px", borderBottom: "1px solid rgba(21,152,203,.06)" }}>
             <span style={{ flex: 1, fontSize: 13 }}>{s.name}</span>
-            <button onClick={() => togCI(s.id)} style={{ padding: "4px 12px", background: "transparent", border: "1px solid " + P.bad, borderRadius: 8, color: P.bad, fontSize: 10, fontWeight: 700, cursor: "pointer" }}>Leave</button>
+            <span style={{ fontSize: 9, color: P.dim }}>active</span>
           </div>
         ))}
       </div>
-    )}
+    </>)}
 
-    {/* Join the Game */}
-    {secBtn("Join the Game (" + notPlaying.length + ")", showJoin, () => setShowJoin(v => !v))}
-    {showJoin && (
+    {/* Sign Up for Next Period */}
+    {secBtn("Sign Up for Next Period", showSignUp, () => setShowSignUp(v => !v), playing.length)}
+    {showSignUp && (
       <div style={gc}>
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search players..." style={{ ...inpS, width: "100%", marginBottom: 8, flex: "none" }} />
-        {filtered.map(s => (
-          <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 4px", borderBottom: "1px solid rgba(21,152,203,.06)" }}>
-            <span style={{ flex: 1, fontSize: 13 }}>{s.name}</span>
-            <button onClick={() => togCI(s.id)} style={{ padding: "4px 12px", background: "linear-gradient(135deg," + P.orange + "," + P.amber + ")", border: "none", borderRadius: 8, color: P.navy, fontSize: 10, fontWeight: 700, cursor: "pointer" }}>Join</button>
-          </div>
-        ))}
-        {filtered.length === 0 && search && <p style={{ color: P.dim, fontSize: 12, padding: "8px 0", textAlign: "center" }}>No matches for "{search}"</p>}
-        {filtered.length === 0 && !search && <p style={{ fontSize: 12, color: P.dim, textAlign: "center", padding: "8px 0" }}>Everyone is already in!</p>}
+        {playing.length === 0 && <p style={{ fontSize: 12, color: P.dim, textAlign: "center", padding: "8px 0" }}>No one signed up yet.</p>}
+        {newSignups.map(s => playerRow(s, togCI, "Leave", leaveBtn, true))}
+        {returning.map(s => playerRow(s, togCI, "Leave", leaveBtn, false))}
+
+        {/* Remaining — collapsed */}
+        <div onClick={() => setShowRemaining(v => !v)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 0 6px", cursor: "pointer", userSelect: "none", marginTop: 4, borderTop: "1px solid rgba(21,152,203,.08)" }}>
+          <span style={{ fontSize: 9, color: P.dim }}>{showRemaining ? "\u25bc" : "\u25b6"}</span>
+          <span style={{ fontSize: 10, fontWeight: 700, color: P.dim, letterSpacing: 1 }}>NOT SIGNED UP ({notPlaying.length})</span>
+        </div>
+        {showRemaining && (<>
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search..." style={{ ...inpS, width: "100%", marginBottom: 8, flex: "none", fontSize: 12 }} />
+          {filtered.map(s => playerRow(s, togCI, "Join", joinBtn, false))}
+          {filtered.length === 0 && search && <p style={{ color: P.dim, fontSize: 12, padding: "8px 0", textAlign: "center" }}>No matches for "{search}"</p>}
+          {filtered.length === 0 && !search && <p style={{ fontSize: 12, color: P.dim, textAlign: "center", padding: "8px 0" }}>Everyone is already signed up!</p>}
+        </>)}
       </div>
     )}
   </div>);
