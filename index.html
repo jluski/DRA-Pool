@@ -508,7 +508,6 @@ function Home({ st, ladder, gn, ini, cd, onJoin }) {
                         <span style={{ fontSize: 11, color: P.grey }}>W/L: <span style={{ color: P.ok }}>{s.wins}</span>/<span style={{ color: P.bad }}>{s.losses}</span></span>
                         <span style={{ fontSize: 11, color: P.grey }}>Games: <span style={{ color: P.off }}>{s.rw}-{s.rl}</span></span>
                         <span style={{ fontSize: 11, color: P.grey }}>Played: <span style={{ color: P.off }}>{s.mp}</span></span>
-                        {s.streak >= 3 && <span style={{ fontSize: 11, color: P.orange }}>{"\ud83d\udd25"} {s.streak} streak</span>}
                         <span style={{ fontSize: 11, color: P.grey }}>Last: <span style={{ color: P.off }}>{s.last ? new Date(s.last).toLocaleDateString() : "N/A"}</span></span>
                         {s.inactive && <span style={{ fontSize: 11, color: P.bad }}>Inactive</span>}
                         <span style={{ fontSize: 11, color: P.grey }}>ELO: <span style={{ color: P.blue, fontWeight: 700 }}>{elo}</span>{eloDelta !== 0 && <span style={{ color: eloDelta > 0 ? P.ok : P.bad }}> ({eloDelta > 0 ? "+" : ""}{eloDelta})</span>} <span style={{ color: P.dim }}>#{rank}</span>{peak > elo && <span style={{ color: P.amber }}> ↑{peak}pk</span>}</span>
