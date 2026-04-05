@@ -549,7 +549,6 @@ function Home({ st, ladder, gn, ini, cd, onJoin }) {
 // ─── BOXES ───────────────────────────────────────────────────
 function BoxesV({ st, gn, ini, save, flash }) {
   const [col, setCol] = useState({});
-  const [tbScore, setTbScore] = useState({});
   if (!st.boxes || !st.boxes.length) return <div style={{ textAlign: "center", padding: 50 }}><p style={{ fontSize: 44 }}>{"\ud83d\udcca"}</p><p style={{ color: P.grey }}>No active round.</p></div>;
   const getS = (bm, p1, p2) => { const m = bm.find(m => (m.player1 === p1 && m.player2 === p2) || (m.player1 === p2 && m.player2 === p1)); if (!m) return null; if (!m.completed) return { pending: true }; return { s1: m.player1 === p1 ? m.score1 : m.score2, s2: m.player1 === p1 ? m.score2 : m.score1 }; };
   const togCol = (k) => setCol(c => ({ ...c, [k]: !c[k] }));
@@ -573,33 +572,21 @@ function BoxesV({ st, gn, ini, save, flash }) {
               const tbKey = "tb_" + bi + "_" + p0.id + "_" + p1.id;
               const tbMs = st.tiebreakerMatches || [];
               const existing = tbMs.find(m => m.box === bi && ((m.player1 === p0.id && m.player2 === p1.id) || (m.player1 === p1.id && m.player2 === p0.id)));
-              const createTb = () => { if (existing) return; const nm = { id: uid(), box: bi, player1: p0.id, player2: p1.id, completed: false, score1: 0, score2: 0, type: "tiebreaker" }; save({ ...st, tiebreakerMatches: [...tbMs, nm] }); flash("Tiebreaker match scheduled!"); };
-              const submitTb = () => { const s1 = parseInt(tbScore[tbKey + "_s1"]) || 0, s2 = parseInt(tbScore[tbKey + "_s2"]) || 0; if ((s1 !== 2 && s2 !== 2) || s1 === s2) { flash("Invalid score — must be 2-0 or 2-1"); return; } save({ ...st, tiebreakerMatches: tbMs.map(m => m.id === existing.id ? { ...m, score1: m.player1 === p0.id ? s1 : s2, score2: m.player1 === p0.id ? s2 : s1, completed: true } : m) }); flash("Tiebreaker recorded!"); };
+              const createTb = () => { if (existing) return; const nm = { id: uid(), box: bi, player1: p0.id, player2: p1.id, completed: false, score1: 0, score2: 0, type: "tiebreaker" }; save({ ...st, tiebreakerMatches: [...tbMs, nm] }); flash("Tiebreaker match added to Matches tab!"); };
               if (!existing) return (
                 <div style={{ marginTop: 6, border: "1px solid", borderRadius: 12, padding: "10px 14px", animation: "tieFlash 1.4s ease-in-out infinite", textAlign: "center" }}>
                   <p style={{ fontSize: 8, fontWeight: 700, letterSpacing: 3, color: P.orange, marginBottom: 8 }}>{"\u26a1"} TIEBREAKER</p>
                   <p style={{ fontSize: 12, color: P.grey, marginBottom: 10 }}>{gn(p0.id)} vs {gn(p1.id)} — box tied on points</p>
-                  <button onClick={createTb} style={{ ...bpS, fontSize: 11, padding: "6px 18px" }}>Schedule Tiebreaker Match</button>
+                  <button onClick={createTb} style={{ ...bpS, fontSize: 11, padding: "6px 18px" }}>Generate Tiebreaker Match</button>
                 </div>
               );
-              if (!existing.completed) {
-                const tbP1 = gn(existing.player1), tbP2 = gn(existing.player2);
-                const k1 = tbKey + "_s1", k2 = tbKey + "_s2";
-                return (
-                  <div style={{ marginTop: 6, border: "1px solid", borderRadius: 12, padding: "10px 14px", animation: "tieFlash 1.4s ease-in-out infinite", textAlign: "center" }}>
-                    <p style={{ fontSize: 8, fontWeight: 700, letterSpacing: 3, color: P.orange, marginBottom: 8 }}>{"\u26a1"} TIEBREAKER — IN PROGRESS</p>
-                    <p style={{ fontSize: 12, color: P.grey, marginBottom: 10 }}>{tbP1} vs {tbP2} · No points awarded</p>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 10 }}>
-                      <span style={{ fontSize: 13, fontWeight: 600, flex: 1, textAlign: "right" }}>{tbP1}</span>
-                      <input type="number" min={0} max={2} value={tbScore[k1] ?? ""} onChange={e => setTbScore(s => ({ ...s, [k1]: e.target.value }))} style={{ ...ssS, width: 44, textAlign: "center" }} placeholder="0" />
-                      <span style={{ color: P.dim }}>–</span>
-                      <input type="number" min={0} max={2} value={tbScore[k2] ?? ""} onChange={e => setTbScore(s => ({ ...s, [k2]: e.target.value }))} style={{ ...ssS, width: 44, textAlign: "center" }} placeholder="0" />
-                      <span style={{ fontSize: 13, fontWeight: 600, flex: 1, textAlign: "left" }}>{tbP2}</span>
-                    </div>
-                    <button onClick={submitTb} style={{ ...bpS, fontSize: 11, padding: "6px 18px" }}>Submit Result</button>
-                  </div>
-                );
-              }
+              if (!existing.completed) return (
+                <div style={{ marginTop: 6, border: "1px solid", borderRadius: 12, padding: "10px 14px", animation: "tieFlash 1.4s ease-in-out infinite", textAlign: "center" }}>
+                  <p style={{ fontSize: 8, fontWeight: 700, letterSpacing: 3, color: P.orange, marginBottom: 8 }}>{"\u26a1"} TIEBREAKER — PENDING</p>
+                  <p style={{ fontSize: 12, color: P.grey }}>{gn(existing.player1)} vs {gn(existing.player2)}</p>
+                  <p style={{ fontSize: 10, color: P.dim, marginTop: 6 }}>Log the result in the Matches tab</p>
+                </div>
+              );
               const tbP1id = existing.player1, tbP2id = existing.player2;
               const winnerId = existing.score1 > existing.score2 ? tbP1id : tbP2id;
               return (
@@ -679,11 +666,13 @@ function MatchesV({ st, gn, logR, ffM }) {
   const bP = (st.boxMatches || []).filter(m => !m.completed), bD = (st.boxMatches || []).filter(m => m.completed);
   const wP = (st.wildCards || []).filter(m => !m.completed), wD = (st.wildCards || []).filter(m => m.completed);
   const oP = (st.openChallenges || []).filter(m => !m.completed), oD = (st.openChallenges || []).filter(m => m.completed);
+  const tbP = (st.tiebreakerMatches || []).filter(m => !m.completed), tbD = (st.tiebreakerMatches || []).filter(m => m.completed);
   return (<div style={{ paddingTop: 16 }}><Tt>Round {st.cycleNumber} Matches</Tt>
+    {tbP.length > 0 && <div><SecHdr k="tbp" label={"⚡ Tiebreaker — Pending (" + tbP.length + ")"} />{!col["tbp"] && tbP.map(m => rm(m, "tiebreakerMatches", "⚡ TIEBREAKER", P.orange))}</div>}
     {bP.length > 0 && <div><SecHdr k="bp" label={"Box — Pending (" + bP.length + ")"} />{!col["bp"] && bP.map(m => rm(m, "boxMatches", "BOX", P.orange))}</div>}
     {wP.length > 0 && <div><SecHdr k="wp" label={"Wild Cards — Pending (" + wP.length + ")"} />{!col["wp"] && wP.map(m => rm(m, "wildCards", "WILD CARD", "#C4A1FF"))}</div>}
     {oP.length > 0 && <div><SecHdr k="op" label={"Open — Pending (" + oP.length + ")"} />{!col["op"] && oP.map(m => rm(m, "openChallenges", "OPEN", P.blue))}</div>}
-    {(bD.length + wD.length + oD.length > 0) && <div><SecHdr k="done" label={"Completed (" + (bD.length + wD.length + oD.length) + ")"} />{!col["done"] && <div>{bD.map(m => rm(m, "boxMatches", "BOX", P.orange))}{wD.map(m => rm(m, "wildCards", "WILD CARD", "#C4A1FF"))}{oD.map(m => rm(m, "openChallenges", "OPEN", P.blue))}</div>}</div>}
+    {(bD.length + wD.length + oD.length + tbD.length > 0) && <div><SecHdr k="done" label={"Completed (" + (bD.length + wD.length + oD.length + tbD.length) + ")"} />{!col["done"] && <div>{tbD.map(m => rm(m, "tiebreakerMatches", "⚡ TIEBREAKER", P.orange))}{bD.map(m => rm(m, "boxMatches", "BOX", P.orange))}{wD.map(m => rm(m, "wildCards", "WILD CARD", "#C4A1FF"))}{oD.map(m => rm(m, "openChallenges", "OPEN", P.blue))}</div>}</div>}
   </div>);
 }
 
