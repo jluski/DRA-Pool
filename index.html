@@ -42,7 +42,26 @@ function buildBoxes(ids, lad) {
   return bx;
 }
 function genBM(boxes) { const m = []; boxes.forEach((b, bi) => { for (let i = 0; i < b.players.length; i++) for (let j = i + 1; j < b.players.length; j++) m.push({ id: uid(), type: "box", box: bi, boxName: b.name, player1: b.players[i], player2: b.players[j], score1: null, score2: null, completed: false, completedAt: null }); }); return m; }
-function genWC(boxes) { if (boxes.length < 2) return []; const wc = [], used = new Set(); const all = boxes.flatMap((b, bi) => b.players.map(p => ({ id: p, box: bi }))); const sh = shuf(all); for (const p of sh) { if (used.has(p.id)) continue; const c = sh.find(x => x.box !== p.box && !used.has(x.id)); if (!c) continue; used.add(p.id); used.add(c.id); wc.push({ id: uid(), type: "wildcard", player1: p.id, player2: c.id, score1: null, score2: null, completed: false, completedAt: null }); } return wc; }
+function genWC(boxes) {
+  if (boxes.length < 2) return [];
+  const wc = [], used = new Set();
+  let all = boxes.flatMap((b, bi) => b.players.map(p => ({ id: p, box: bi })));
+  if (all.length % 2 !== 0) {
+    let removeIdx = -1;
+    for (let i = all.length - 1; i >= 0; i--) { if (boxes[all[i].box] && boxes[all[i].box].isSwing) { removeIdx = i; break; } }
+    if (removeIdx === -1) removeIdx = all.length - 1;
+    all.splice(removeIdx, 1);
+  }
+  const sh = shuf(all);
+  for (const p of sh) {
+    if (used.has(p.id)) continue;
+    const c = sh.find(x => x.box !== p.box && !used.has(x.id));
+    if (!c) continue;
+    used.add(p.id); used.add(c.id);
+    wc.push({ id: uid(), type: "wildcard", player1: p.id, player2: c.id, score1: null, score2: null, completed: false, completedAt: null });
+  }
+  return wc;
+}
 
 function boxSt(pids, matches) {
   const s = {}; pids.forEach(id => { s[id] = { id, pts: 0, w: 0, l: 0, rw: 0, rl: 0 }; });
@@ -619,7 +638,7 @@ function ChallengeV({ players, newOC }) {
   const [p1, setP1] = useState(""); const [p2, setP2] = useState("");
   if (players.length < 2) return <div style={{ textAlign: "center", padding: 40 }}><p style={{ color: P.grey }}>Need 2+ players.</p></div>;
   return (<div style={{ paddingTop: 16 }}><Tt>Open Challenge</Tt>
-    <p style={{ fontSize: 12, color: P.grey, marginBottom: 16 }}>Win=1pt. Lose=0. No cap.</p>
+    <p style={{ fontSize: 12, color: P.grey, marginBottom: 16 }}>Win=2pts. Lose=0. No cap on games played.</p>
     <div style={gc}>
       <label style={{ fontSize: 9, fontWeight: 700, color: P.orange, letterSpacing: 2, display: "block", marginBottom: 3 }}>CHALLENGER</label>
       <select value={p1} onChange={e => setP1(e.target.value)} style={ssS}><option value="">Select...</option>{players.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
@@ -859,7 +878,8 @@ function RulesV() {
               3× shutout box wins (3 × 5) → <span style={{ color: P.orange, fontWeight: 700 }}>15 pts</span><br />
               Box winner bonus → <span style={{ color: P.orange, fontWeight: 700 }}>+3 pts</span><br />
               Wild card shutout win → <span style={{ color: P.orange, fontWeight: 700 }}>+5 pts</span><br />
-              <span style={{ color: P.off, fontWeight: 700, fontSize: 13 }}>Total: 23 pts</span>
+              <span style={{ color: P.off, fontWeight: 700, fontSize: 13 }}>Box/WC total: 23 pts</span><br />
+              <span style={{ color: P.blue, fontSize: 11 }}>+ Open challenges: +2 pts each (unlimited)</span>
             </p>
           </div>
         </div>
