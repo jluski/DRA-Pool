@@ -66,8 +66,8 @@ function calcLad(players, st) {
     a.mp++; b.mp++; a.rw += m.score1; a.rl += m.score2; b.rw += m.score2; b.rl += m.score1;
     if (m.completedAt) { if (m.completedAt > a.last) a.last = m.completedAt; if (m.completedAt > b.last) b.last = m.completedAt; }
     if (m.type === "open") {
-      if (m.score1 > m.score2) { a.points += 1; a.openPts += 1; a.wins++; b.losses++; a.streak = a.streak > 0 ? a.streak + 1 : 1; b.streak = 0; }
-      else { b.points += 1; b.openPts += 1; b.wins++; a.losses++; b.streak = b.streak > 0 ? b.streak + 1 : 1; a.streak = 0; }
+      if (m.score1 > m.score2) { a.points += 2; a.openPts += 2; a.wins++; b.losses++; a.streak = a.streak > 0 ? a.streak + 1 : 1; b.streak = 0; }
+      else { b.points += 2; b.openPts += 2; b.wins++; a.losses++; b.streak = b.streak > 0 ? b.streak + 1 : 1; a.streak = 0; }
     } else {
       const w1 = m.score1 > m.score2; const wp = w1 ? (m.score2 === 0 ? 5 : 4) : (m.score1 === 0 ? 5 : 4); const lp = w1 ? (m.score2 > 0 ? 2 : 0) : (m.score1 > 0 ? 2 : 0);
       if (w1) { a.points += wp; a.boxPts += wp; a.wins++; b.points += lp; b.boxPts += lp; b.losses++; a.streak = a.streak > 0 ? a.streak + 1 : 1; b.streak = 0; }
@@ -902,7 +902,7 @@ function PastCycleRow({ c, gn, cycleIdx, saveCycle }) {
   });
   realOC.forEach(m => {
     ensureP(m.player1); ensureP(m.player2);
-    if (m.score1 > m.score2) pTotals[m.player1].matchPts += 1; else pTotals[m.player2].matchPts += 1;
+    if (m.score1 > m.score2) pTotals[m.player1].matchPts += 2; else pTotals[m.player2].matchPts += 2;
   });
   (c.bonuses || []).forEach(b => { ensureP(b.id); pTotals[b.id].bonusPts += b.pts; });
   const playerList = Object.values(pTotals).map(p => ({ ...p, total: p.matchPts + p.bonusPts })).sort((a, b) => b.total - a.total);
@@ -1210,7 +1210,7 @@ function AdminV({ st, ladder, startCyc, completeCyc, undoCyc, resetAll, addP, rm
       const pTot = {};
       const ep = id => { if (!pTot[id]) pTot[id] = { id, pts: 0 }; };
       [...rBM, ...rWC].forEach(m => { ep(m.player1); ep(m.player2); if (m.score1 > m.score2) { pTot[m.player1].pts += m.score2 === 0 ? 5 : 4; if (m.score2 > 0) pTot[m.player2].pts += 2; } else { pTot[m.player2].pts += m.score1 === 0 ? 5 : 4; if (m.score1 > 0) pTot[m.player1].pts += 2; } });
-      rOC.forEach(m => { ep(m.player1); ep(m.player2); if (m.score1 > m.score2) pTot[m.player1].pts += 1; else pTot[m.player2].pts += 1; });
+      rOC.forEach(m => { ep(m.player1); ep(m.player2); if (m.score1 > m.score2) pTot[m.player1].pts += 2; else pTot[m.player2].pts += 2; });
       (lastC.bonuses || []).forEach(b => { ep(b.id); pTot[b.id].pts += b.pts; });
       const sorted = Object.values(pTot).sort((a, b) => b.pts - a.pts);
       const topScorer = sorted[0];
