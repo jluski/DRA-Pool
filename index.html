@@ -151,7 +151,7 @@ function getRankChanges(ladder, st, players) {
 }
 
 const PLAYERS = ["Gianna Acitelli","Elvira Aguillon","Koula Angelinas","Jean Marie Apruzzese","Gerard Apruzzese","Frank Banta","Bart Bess","Glen Besser","Sreyansh Biswal","Amanda Bloshuk","Eduardo Bonilla","Jason Borreo","Brad Boyle","Adam Breen","Duncan Brennan","Kenneth Carpenter","Hans Castaneda","Miguel Castro","Karen Chen","Steven Ciardiello","Dan Conlisk","Christopher Cook","Bridget Cooney","Rafael Cordero","Mike Cottam","Nicholas Cresta","Shawn Dacey","Zahra Derrick","James Driscoll","Matthew Farina","Susan Fattorusso","Lucy Ferrantelli","Sandy French","Daniel Giordano","Daniel Goldman","Brett Gottlieb","Korey Grabowski","Daniel Graham","David Gray","Andrew Grider","Max Gustafson","John Haaf","Melissa Haime","Christopher Halloran","William Hankers","Jake Hannah","Lauren Hayes","Anthony Helmandollar","Ian Holland","Hussein Hussein","Robert Hyman","Peter Ibelli","Patrick Judge","Brian Kittner","Sam Klaber","Jared Konigsberg","John Kopans","Werner Kratovil","Jonathan Lea","Jeffrey Lehrman","Christopher Lepore","Wei Lin","Jack Linehan","David Luski","Jason Luski","Shayne Lyons","Sloan Martin","Gabriella Mascellino","Quinn McQuade","Adam Melnick","Mario Minera","Anna Ming","Cristin Mitchell","Melanie Mohr","Indira Negron","Payton Odom","Peter Papadakos","Anjali Pharsi","Regina Poniros","Delaney Reynolds","Stephanie Rivera","Janine Roberts","Maria Rodriguez","Charles Ruotolo","Michelle Santos","Merritt Scott","John Serzan","Tracy Shi","Matt Shore","Tracy Sonnabend","Kim Stirba","Carol Su","Stephen Suriano","Aaron Talan","Amanda Taylor","Anthony Venditti","Ivan Vidal","Hope Wasserman","Andrew Wietstock","Liying Yang","Thomas Yang","Ashley Yip","Michael Yurick"].map(n => ({ id: uid(), name: n, joinedAt: nw() }));
-const DEF = { players: PLAYERS, boxes: [], boxMatches: [], wildCards: [], openChallenges: [], checkedIn: [], pastCycles: [], cycleNumber: 0, cycleStart: null, cycleDurationWeeks: 4, auditLog: [] };
+const DEF = { players: PLAYERS, boxes: [], boxMatches: [], wildCards: [], openChallenges: [], checkedIn: [], pastCycles: [], cycleNumber: 0, cycleStart: null, cycleDurationWeeks: 4, auditLog: [], adminPin: null };
 const withLog = (s, action, details) => { const al = [...(s.auditLog || []), { id: uid(), ts: nw(), action, details }]; return { ...s, auditLog: al.length > 200 ? al.slice(-200) : al }; };
 
 function useCD(cycleStart, weeks) { const [r, setR] = useState({ d: 0, h: 0, m: 0 }); useEffect(() => { const tick = () => { if (!cycleStart) { setR({ d: 0, h: 0, m: 0 }); return; } const end = new Date(new Date(cycleStart).getTime() + (weeks || 4) * 7 * 864e5); const diff = Math.max(0, end.getTime() - Date.now()); setR({ d: Math.floor(diff / 864e5), h: Math.floor((diff % 864e5) / 36e5), m: Math.floor((diff % 36e5) / 6e4) }); }; tick(); const id = setInterval(tick, 6e4); return () => clearInterval(id); }, [cycleStart, weeks]); return r; }
@@ -1086,13 +1086,13 @@ function AdminV({ st, ladder, startCyc, completeCyc, undoCyc, resetAll, addP, rm
   const [cc, setCc] = useState(false); const [cr, setCr] = useState(false); const [cu, setCu] = useState(false);
   const [nm, setNm] = useState(""); const [rmId, setRmId] = useState(null); const [search, setSearch] = useState("");
   const [showPlayers, setShowPlayers] = useState(true);
+  const [showPinChange, setShowPinChange] = useState(false); const [newPinA, setNewPinA] = useState(""); const [newPinB, setNewPinB] = useState(""); const [pinErr, setPinErr] = useState("");
   const daysInCycle = st.cycleStart ? dd(nw(), st.cycleStart) : 0;
-  const overdueMatches = daysInCycle >= 7 ? [
+  const pendingMatches = [
     ...(st.boxMatches || []).filter(m => !m.completed).map(m => ({ ...m, matchType: "Box", label: m.boxName || "Box" })),
     ...(st.wildCards || []).filter(m => !m.completed).map(m => ({ ...m, matchType: "Wild Card", label: "Wild Card" })),
-    ...(st.openChallenges || []).filter(m => !m.completed).map(m => ({ ...m, matchType: "Open", label: "Open" })),
-  ] : [];
-  const chk = () => { if (pin === "5755") { setOk(true); setErr(false); } else { setErr(true); setPin(""); } };
+  ];
+  const chk = () => { if (pin === (st.adminPin || "5755")) { setOk(true); setErr(false); } else { setErr(true); setPin(""); } };
   const pend = ((st.boxMatches || []).filter(m => !m.completed).length) + ((st.wildCards || []).filter(m => !m.completed).length);
   const tot = [...(st.boxMatches || []), ...(st.wildCards || []), ...(st.openChallenges || [])].filter(m => m.completed).length + (st.pastCycles || []).reduce((a, c) => [...(c.boxMatches || []), ...(c.wildCards || []), ...(c.openChallenges || [])].filter(m => m.completed).length + a, 0);
   const filtLad = search.trim() ? ladder.filter(s => s.name.toLowerCase().includes(search.toLowerCase())) : ladder;
@@ -1164,6 +1164,50 @@ function AdminV({ st, ladder, startCyc, completeCyc, undoCyc, resetAll, addP, rm
       {cu ? <div><p style={{ fontSize: 11, color: P.bad, marginBottom: 6 }}>Delete Round {st.cycleNumber}?</p><button onClick={() => { undoCyc(); setCu(false); }} style={{ ...bpS, background: P.amber, color: P.navy }}>Yes</button><button onClick={() => setCu(false)} style={bcS}>Cancel</button></div>
         : <button onClick={() => setCu(true)} style={{ ...bpS, background: "transparent", border: "1px solid " + P.amber, color: P.amber }}>Undo Round {st.cycleNumber}</button>}</div>}
 
+    {(st.pastCycles || []).length > 0 && (() => {
+      const lastC = st.pastCycles[st.pastCycles.length - 1];
+      const rBM = (lastC.boxMatches || []).filter(m => m.completed && !m.forfeit);
+      const rWC = (lastC.wildCards || []).filter(m => m.completed && !m.forfeit);
+      const rOC = (lastC.openChallenges || []).filter(m => m.completed);
+      const pTot = {};
+      const ep = id => { if (!pTot[id]) pTot[id] = { id, pts: 0 }; };
+      [...rBM, ...rWC].forEach(m => { ep(m.player1); ep(m.player2); if (m.score1 > m.score2) { pTot[m.player1].pts += m.score2 === 0 ? 5 : 4; if (m.score2 > 0) pTot[m.player2].pts += 2; } else { pTot[m.player2].pts += m.score1 === 0 ? 5 : 4; if (m.score1 > 0) pTot[m.player1].pts += 2; } });
+      rOC.forEach(m => { ep(m.player1); ep(m.player2); if (m.score1 > m.score2) pTot[m.player1].pts += 1; else pTot[m.player2].pts += 1; });
+      (lastC.bonuses || []).forEach(b => { ep(b.id); pTot[b.id].pts += b.pts; });
+      const sorted = Object.values(pTot).sort((a, b) => b.pts - a.pts);
+      const topScorer = sorted[0];
+      const shutouts = [...rBM, ...rWC, ...rOC].filter(m => (m.score1 === 2 && m.score2 === 0) || (m.score2 === 2 && m.score1 === 0)).length;
+      const box1 = (lastC.boxes || []).find(b => !b.isSwing);
+      const box1Idx = box1 ? lastC.boxes.indexOf(box1) : -1;
+      const box1BM = box1Idx >= 0 ? (lastC.boxMatches || []).filter(m => m.box === box1Idx) : [];
+      const champ = box1 ? boxSt(box1.players, box1BM)[0] : null;
+      const totalPlayed = rBM.length + rWC.length + rOC.length;
+      return (
+        <div style={{ ...gc, background: "linear-gradient(135deg, rgba(241,138,0,.1), rgba(21,152,203,.06))", borderColor: "rgba(241,138,0,.25)" }}>
+          <h4 style={{ fontSize: 15, fontWeight: 600, color: P.orange, fontFamily: "Georgia,serif", marginBottom: 4 }}>Round {lastC.cycle} Summary</h4>
+          <p style={{ fontSize: 10, color: P.dim, marginBottom: 10 }}>{fmtDate(lastC.startedAt)}</p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {champ && <div style={{ flex: 1, minWidth: 100, background: "rgba(0,20,40,.4)", borderRadius: 10, padding: "10px 12px", border: "1px solid rgba(241,138,0,.2)" }}>
+              <p style={{ fontSize: 9, color: P.orange, fontWeight: 700, letterSpacing: 1, marginBottom: 4 }}>🏆 CHAMPION</p>
+              <p style={{ fontSize: 13, color: P.white, fontWeight: 600 }}>{gn(champ.id)}</p>
+            </div>}
+            {topScorer && <div style={{ flex: 1, minWidth: 100, background: "rgba(0,20,40,.4)", borderRadius: 10, padding: "10px 12px", border: "1px solid rgba(21,152,203,.2)" }}>
+              <p style={{ fontSize: 9, color: P.blue, fontWeight: 700, letterSpacing: 1, marginBottom: 4 }}>⭐ TOP SCORER</p>
+              <p style={{ fontSize: 13, color: P.white, fontWeight: 600 }}>{gn(topScorer.id)} <span style={{ color: P.orange, fontSize: 11 }}>{topScorer.pts}pts</span></p>
+            </div>}
+            <div style={{ flex: 1, minWidth: 80, background: "rgba(0,20,40,.4)", borderRadius: 10, padding: "10px 12px", border: "1px solid rgba(255,255,255,.08)" }}>
+              <p style={{ fontSize: 9, color: P.dim, fontWeight: 700, letterSpacing: 1, marginBottom: 4 }}>🎱 MATCHES</p>
+              <p style={{ fontSize: 13, color: P.off, fontWeight: 600 }}>{totalPlayed}</p>
+            </div>
+            <div style={{ flex: 1, minWidth: 80, background: "rgba(0,20,40,.4)", borderRadius: 10, padding: "10px 12px", border: "1px solid rgba(255,255,255,.08)" }}>
+              <p style={{ fontSize: 9, color: P.dim, fontWeight: 700, letterSpacing: 1, marginBottom: 4 }}>⚡ SHUTOUTS</p>
+              <p style={{ fontSize: 13, color: P.off, fontWeight: 600 }}>{shutouts}</p>
+            </div>
+          </div>
+        </div>
+      );
+    })()}
+
     {(st.pastCycles || []).length > 0 && (
       <div style={gc}>
         <h4 style={{ fontSize: 15, fontWeight: 600, color: P.white, fontFamily: "Georgia,serif", marginBottom: 10 }}>Past Rounds</h4>
@@ -1175,19 +1219,35 @@ function AdminV({ st, ladder, startCyc, completeCyc, undoCyc, resetAll, addP, rm
       </div>
     )}
 
-    {overdueMatches.length > 0 && (
+    {pendingMatches.length > 0 && (
       <div style={gc}>
-        <h4 style={{ fontSize: 15, fontWeight: 600, color: P.amber, fontFamily: "Georgia,serif", marginBottom: 10 }}>Match Reminders ({overdueMatches.length})</h4>
-        <p style={{ fontSize: 11, color: P.grey, marginBottom: 10 }}>These matches have been pending for {Math.floor(daysInCycle)} days.</p>
-        {overdueMatches.map(m => (
+        <h4 style={{ fontSize: 15, fontWeight: 600, color: P.amber, fontFamily: "Georgia,serif", marginBottom: 6 }}>Pending Matches ({pendingMatches.length})</h4>
+        {daysInCycle > 0 && <p style={{ fontSize: 11, color: P.grey, marginBottom: 10 }}>Round in progress for {Math.floor(daysInCycle)} day{Math.floor(daysInCycle) !== 1 ? "s" : ""}. {daysInCycle >= 7 ? "These are overdue." : ""}</p>}
+        {pendingMatches.map(m => (
           <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0", borderBottom: "1px solid rgba(21,152,203,.06)" }}>
-            <span style={{ fontSize: 9, fontWeight: 700, color: P.amber, width: 52, letterSpacing: 1 }}>{m.label.toUpperCase()}</span>
+            <span style={{ fontSize: 9, fontWeight: 700, color: daysInCycle >= 7 ? P.bad : P.amber, width: 52, letterSpacing: 1 }}>{m.label.toUpperCase()}</span>
             <span style={{ flex: 1, fontSize: 12 }}>{gn(m.player1)} <span style={{ color: P.dim }}>vs</span> {gn(m.player2)}</span>
-            <button onClick={() => ffM(m.id, m.matchType === "Box" ? "boxMatches" : m.matchType === "Wild Card" ? "wildCards" : "openChallenges")} style={{ padding: "4px 10px", background: "transparent", border: "1px solid " + P.dim, borderRadius: 7, color: P.dim, fontSize: 10, fontWeight: 700, cursor: "pointer" }}>Forfeit</button>
+            <button onClick={() => ffM(m.id, m.matchType === "Box" ? "boxMatches" : "wildCards")} style={{ padding: "4px 10px", background: "transparent", border: "1px solid " + P.dim, borderRadius: 7, color: P.dim, fontSize: 10, fontWeight: 700, cursor: "pointer" }}>Forfeit</button>
           </div>
         ))}
       </div>
     )}
+
+    <div style={gc}><h4 style={{ fontSize: 15, fontWeight: 600, color: P.white, fontFamily: "Georgia,serif", marginBottom: 8 }}>Admin PIN</h4>
+      {!showPinChange ? (
+        <button onClick={() => { setShowPinChange(true); setNewPinA(""); setNewPinB(""); setPinErr(""); }} style={{ ...bpS, background: "transparent", border: "1px solid " + P.dim, color: P.grey, marginTop: 0 }}>Change PIN</button>
+      ) : (
+        <div>
+          <input type="password" inputMode="numeric" maxLength={4} value={newPinA} onChange={e => setNewPinA(e.target.value.replace(/\D/g, ""))} placeholder="New PIN (4 digits)" style={{ ...inpS, width: "100%", marginBottom: 8 }} />
+          <input type="password" inputMode="numeric" maxLength={4} value={newPinB} onChange={e => setNewPinB(e.target.value.replace(/\D/g, ""))} placeholder="Confirm PIN" style={{ ...inpS, width: "100%", marginBottom: 8 }} />
+          {pinErr && <p style={{ fontSize: 11, color: P.bad, marginBottom: 8 }}>{pinErr}</p>}
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => { if (newPinA.length !== 4) { setPinErr("PIN must be 4 digits."); return; } if (newPinA !== newPinB) { setPinErr("PINs don't match."); return; } save(withLog({ ...st, adminPin: newPinA }, "PIN_CHANGED", "Admin PIN updated")); setShowPinChange(false); setPinErr(""); }} style={{ ...bpS, marginTop: 0 }}>Save PIN</button>
+            <button onClick={() => setShowPinChange(false)} style={bcS}>Cancel</button>
+          </div>
+        </div>
+      )}
+    </div>
 
     <div style={{ ...gc, borderColor: "rgba(248,113,113,.2)" }}><h4 style={{ fontSize: 15, fontWeight: 600, color: P.bad, fontFamily: "Georgia,serif" }}>Danger Zone</h4>
       {cr ? <div><p style={{ fontSize: 11, color: P.bad, marginBottom: 8 }}>Delete ALL?</p><button onClick={() => { resetAll(); setCr(false); }} style={{ ...bpS, background: P.bad, color: "#fff" }}>Yes</button><button onClick={() => setCr(false)} style={bcS}>Cancel</button></div>
