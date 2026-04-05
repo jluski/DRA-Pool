@@ -511,13 +511,7 @@ function Home({ st, ladder, gn, ini, cd, onJoin }) {
                         {s.streak >= 3 && <span style={{ fontSize: 11, color: P.orange }}>{"\ud83d\udd25"} {s.streak} streak</span>}
                         <span style={{ fontSize: 11, color: P.grey }}>Last: <span style={{ color: P.off }}>{s.last ? new Date(s.last).toLocaleDateString() : "N/A"}</span></span>
                         {s.inactive && <span style={{ fontSize: 11, color: P.bad }}>Inactive</span>}
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 10px", background: "rgba(21,152,203,.08)", borderRadius: 10, marginBottom: 8, flexWrap: "wrap" }}>
-                        <span style={{ fontSize: 9, fontWeight: 700, color: P.blue, letterSpacing: 2 }}>ELO</span>
-                        <span style={{ fontSize: 18, fontWeight: 700, color: P.off }}>{elo}</span>
-                        {eloDelta !== 0 && <span style={{ fontSize: 11, fontWeight: 700, color: eloDelta > 0 ? P.ok : P.bad }}>{eloDelta > 0 ? "+" : ""}{eloDelta} this round</span>}
-                        <span style={{ fontSize: 10, color: P.dim }}>#{rank} ranked</span>
-                        {peak > elo && <span style={{ fontSize: 10, color: P.amber }}>Peak {peak}</span>}
+                        <span style={{ fontSize: 11, color: P.grey }}>ELO: <span style={{ color: P.blue, fontWeight: 700 }}>{elo}</span>{eloDelta !== 0 && <span style={{ color: eloDelta > 0 ? P.ok : P.bad }}> ({eloDelta > 0 ? "+" : ""}{eloDelta})</span>} <span style={{ color: P.dim }}>#{rank}</span>{peak > elo && <span style={{ color: P.amber }}> ↑{peak}pk</span>}</span>
                       </div>
                       {!hist.length ? <p style={{ fontSize: 10, color: P.dim, fontStyle: "italic" }}>No match history.</p> : (
                         <div>
