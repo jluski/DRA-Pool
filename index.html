@@ -117,6 +117,40 @@ function getH2H(p1, p2, st) {
   return { w1, w2 };
 }
 
+// ELO rating system — score-margin weighted, provisional K, per-match deltas
+function calcElo(players, st) {
+  const K_BOX = 32, K_WC = 24, K_OPEN = 16, K_PROV = 48, PROV = 8, BASE = 1000;
+  const ratings = {}, peaks = {}, played = {}, deltas = {};
+  players.forEach(p => { ratings[p.id] = BASE; peaks[p.id] = BASE; played[p.id] = 0; });
+  const all = [];
+  (st.pastCycles || []).forEach(c => {
+    (c.boxMatches || []).forEach(m => all.push({ ...m, _k: K_BOX }));
+    (c.wildCards || []).forEach(m => all.push({ ...m, _k: K_WC }));
+    (c.openChallenges || []).forEach(m => all.push({ ...m, _k: K_OPEN }));
+  });
+  (st.boxMatches || []).forEach(m => all.push({ ...m, _k: K_BOX }));
+  (st.wildCards || []).forEach(m => all.push({ ...m, _k: K_WC }));
+  (st.openChallenges || []).forEach(m => all.push({ ...m, _k: K_OPEN }));
+  all.filter(m => m.completed && !m.forfeit && (m.score1 + m.score2) > 0 && ratings[m.player1] !== undefined && ratings[m.player2] !== undefined)
+    .sort((a, b) => (a.completedAt || "").localeCompare(b.completedAt || ""))
+    .forEach(m => {
+      const ra = ratings[m.player1], rb = ratings[m.player2];
+      const tot = m.score1 + m.score2;
+      const res1 = m.score1 / tot, res2 = m.score2 / tot;
+      const ea = 1 / (1 + Math.pow(10, (rb - ra) / 400));
+      const ka = played[m.player1] < PROV ? K_PROV : m._k;
+      const kb = played[m.player2] < PROV ? K_PROV : m._k;
+      const da = Math.round(ka * (res1 - ea));
+      const db = Math.round(kb * (res2 - (1 - ea)));
+      ratings[m.player1] += da; ratings[m.player2] += db;
+      peaks[m.player1] = Math.max(peaks[m.player1], ratings[m.player1]);
+      peaks[m.player2] = Math.max(peaks[m.player2], ratings[m.player2]);
+      played[m.player1]++; played[m.player2]++;
+      deltas[m.id] = { [m.player1]: da, [m.player2]: db };
+    });
+  return { ratings, peaks, deltas };
+}
+
 // Get monthly champions from past cycles (Box 1 winner)
 function getChampions(st, gn) {
   const champs = [];
@@ -318,6 +352,11 @@ function Home({ st, ladder, gn, ini, cd, onJoin }) {
   const [activeOnly, setActiveOnly] = useState(false);
   const [showChampHistory, setShowChampHistory] = useState(false);
   const displayLad = ladder.filter(s => s.mp > 0 && (activeOnly ? !s.inactive : true));
+  const eloData = calcElo(st.players, st);
+  const prevSt = { ...st, boxMatches: [], wildCards: [], openChallenges: [] };
+  const prevElo = calcElo(st.players, prevSt);
+  const eloRanked = [...st.players].sort((a, b) => (eloData.ratings[b.id] || 1000) - (eloData.ratings[a.id] || 1000));
+  const eloRank = {}; eloRanked.forEach((p, i) => { eloRank[p.id] = i + 1; });
   const last5 = (st.openChallenges || []).filter(m => m.completed).slice(-5).reverse();
   const getS = (bm, p1, p2) => { const m = bm.find(m => (m.player1 === p1 && m.player2 === p2) || (m.player1 === p2 && m.player2 === p1)); if (!m) return null; if (!m.completed) return { pending: true }; return { s1: m.player1 === p1 ? m.score1 : m.score2, s2: m.player1 === p1 ? m.score2 : m.score1 }; };
 
@@ -456,36 +495,52 @@ function Home({ st, ladder, gn, ini, cd, onJoin }) {
                   <span style={{ width: 22, color: P.ok, fontSize: 11 }}>{s.wins}</span>
                   <span style={{ width: 22, color: P.bad, fontSize: 11 }}>{s.losses}</span>
                 </div>
-                {exp === s.id && (
-                  <div style={{ padding: "8px 12px 10px 12px", background: "rgba(0,20,40,.7)", borderBottom: "1px solid rgba(21,152,203,.08)", animation: "fadeIn .15s" }}>
-                    <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 8 }}>
-                      <span style={{ fontSize: 11, color: P.grey }}>W/L: <span style={{ color: P.ok }}>{s.wins}</span>/<span style={{ color: P.bad }}>{s.losses}</span></span>
-                      <span style={{ fontSize: 11, color: P.grey }}>Games: <span style={{ color: P.off }}>{s.rw}-{s.rl}</span></span>
-                      <span style={{ fontSize: 11, color: P.grey }}>Played: <span style={{ color: P.off }}>{s.mp}</span></span>
-                      {s.streak >= 3 && <span style={{ fontSize: 11, color: P.orange }}>{"\ud83d\udd25"} {s.streak} streak</span>}
-                      <span style={{ fontSize: 11, color: P.grey }}>Last: <span style={{ color: P.off }}>{s.last ? new Date(s.last).toLocaleDateString() : "N/A"}</span></span>
-                      {s.inactive && <span style={{ fontSize: 11, color: P.bad }}>Inactive</span>}
-                    </div>
-                    {(() => {
-                      const hist = getPlayerHistory(s.id);
-                      if (!hist.length) return <p style={{ fontSize: 10, color: P.dim, fontStyle: "italic" }}>No match history.</p>;
-                      return (
+                {exp === s.id && (() => {
+                  const elo = eloData.ratings[s.id] || 1000;
+                  const peak = eloData.peaks[s.id] || 1000;
+                  const prev = prevElo.ratings[s.id] || 1000;
+                  const eloDelta = elo - prev;
+                  const rank = eloRank[s.id] || "—";
+                  const hist = getPlayerHistory(s.id);
+                  return (
+                    <div style={{ padding: "8px 12px 10px 12px", background: "rgba(0,20,40,.7)", borderBottom: "1px solid rgba(21,152,203,.08)", animation: "fadeIn .15s" }}>
+                      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 8 }}>
+                        <span style={{ fontSize: 11, color: P.grey }}>W/L: <span style={{ color: P.ok }}>{s.wins}</span>/<span style={{ color: P.bad }}>{s.losses}</span></span>
+                        <span style={{ fontSize: 11, color: P.grey }}>Games: <span style={{ color: P.off }}>{s.rw}-{s.rl}</span></span>
+                        <span style={{ fontSize: 11, color: P.grey }}>Played: <span style={{ color: P.off }}>{s.mp}</span></span>
+                        {s.streak >= 3 && <span style={{ fontSize: 11, color: P.orange }}>{"\ud83d\udd25"} {s.streak} streak</span>}
+                        <span style={{ fontSize: 11, color: P.grey }}>Last: <span style={{ color: P.off }}>{s.last ? new Date(s.last).toLocaleDateString() : "N/A"}</span></span>
+                        {s.inactive && <span style={{ fontSize: 11, color: P.bad }}>Inactive</span>}
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 10px", background: "rgba(21,152,203,.08)", borderRadius: 10, marginBottom: 8, flexWrap: "wrap" }}>
+                        <span style={{ fontSize: 9, fontWeight: 700, color: P.blue, letterSpacing: 2 }}>ELO</span>
+                        <span style={{ fontSize: 18, fontWeight: 700, color: P.off }}>{elo}</span>
+                        {eloDelta !== 0 && <span style={{ fontSize: 11, fontWeight: 700, color: eloDelta > 0 ? P.ok : P.bad }}>{eloDelta > 0 ? "+" : ""}{eloDelta} this round</span>}
+                        <span style={{ fontSize: 10, color: P.dim }}>#{rank} ranked</span>
+                        {peak > elo && <span style={{ fontSize: 10, color: P.amber }}>Peak {peak}</span>}
+                      </div>
+                      {!hist.length ? <p style={{ fontSize: 10, color: P.dim, fontStyle: "italic" }}>No match history.</p> : (
                         <div>
                           <p style={{ fontSize: 9, fontWeight: 700, color: P.blue, letterSpacing: 2, textTransform: "uppercase", marginBottom: 5 }}>Match History</p>
-                          {hist.map(h => (
-                            <div key={h.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 0", borderBottom: "1px solid rgba(21,152,203,.06)" }}>
-                              <span style={{ fontSize: 10, fontWeight: 700, color: h.forfeit ? P.dim : h.won ? P.ok : P.bad, width: 14, flexShrink: 0 }}>{h.forfeit ? "FF" : h.won ? "W" : "L"}</span>
-                              <span style={{ fontSize: 11, color: P.off, width: 30, flexShrink: 0 }}>{h.forfeit ? "—" : h.myScore + "-" + h.oppScore}</span>
-                              <span style={{ fontSize: 11, color: P.white, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>vs {h.oppName}</span>
-                              <span style={{ fontSize: 9, fontWeight: 700, color: h.typeLabel === "Open" ? P.blue : h.typeLabel === "Wild Card" ? P.amber : P.orange, flexShrink: 0 }}>{h.typeLabel}</span>
-                              <span style={{ fontSize: 9, color: P.dim, flexShrink: 0, marginLeft: 2 }}>{h.completedAt ? fmtDate(h.completedAt) : ""}</span>
-                            </div>
-                          ))}
+                          {hist.map(h => {
+                            const d = eloData.deltas[h.id];
+                            const eloDlt = d ? d[s.id] : null;
+                            return (
+                              <div key={h.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 0", borderBottom: "1px solid rgba(21,152,203,.06)" }}>
+                                <span style={{ fontSize: 10, fontWeight: 700, color: h.forfeit ? P.dim : h.won ? P.ok : P.bad, width: 14, flexShrink: 0 }}>{h.forfeit ? "FF" : h.won ? "W" : "L"}</span>
+                                <span style={{ fontSize: 11, color: P.off, width: 30, flexShrink: 0 }}>{h.forfeit ? "—" : h.myScore + "-" + h.oppScore}</span>
+                                <span style={{ fontSize: 11, color: P.white, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>vs {h.oppName}</span>
+                                <span style={{ fontSize: 9, fontWeight: 700, color: h.typeLabel === "Open" ? P.blue : h.typeLabel === "Wild Card" ? P.amber : P.orange, flexShrink: 0 }}>{h.typeLabel}</span>
+                                {eloDlt !== null && !h.forfeit && <span style={{ fontSize: 9, fontWeight: 700, color: eloDlt > 0 ? P.ok : P.bad, flexShrink: 0, minWidth: 28, textAlign: "right" }}>{eloDlt > 0 ? "+" : ""}{eloDlt}</span>}
+                                <span style={{ fontSize: 9, color: P.dim, flexShrink: 0 }}>{h.completedAt ? fmtDate(h.completedAt) : ""}</span>
+                              </div>
+                            );
+                          })}
                         </div>
-                      );
-                    })()}
-                  </div>
-                )}
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             ))}
           </div>
