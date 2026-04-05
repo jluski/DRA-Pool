@@ -70,7 +70,13 @@ function boxSt(pids, matches) {
     s[m.player1].rw += m.score1; s[m.player1].rl += m.score2; s[m.player2].rw += m.score2; s[m.player2].rl += m.score1;
     if (m.score1 > m.score2) { s[m.player1].pts += m.score2 === 0 ? 5 : 4; s[m.player1].w++; s[m.player2].pts += m.score2 > 0 ? 2 : 0; s[m.player2].l++; }
     else { s[m.player2].pts += m.score1 === 0 ? 5 : 4; s[m.player2].w++; s[m.player1].pts += m.score1 > 0 ? 2 : 0; s[m.player1].l++; } });
-  return Object.values(s).sort((a, b) => b.pts - a.pts || b.w - a.w || b.rw - a.rw);
+  return Object.values(s).sort((a, b) => {
+    if (b.pts !== a.pts) return b.pts - a.pts;
+    let aW = 0, bW = 0;
+    matches.filter(m => m.completed && !m.forfeit && ((m.player1 === a.id && m.player2 === b.id) || (m.player1 === b.id && m.player2 === a.id))).forEach(m => { if ((m.player1 === a.id && m.score1 > m.score2) || (m.player2 === a.id && m.score2 > m.score1)) aW++; else bW++; });
+    if (aW !== bW) return bW - aW;
+    return b.w - a.w || b.rw - a.rw;
+  });
 }
 
 function calcLad(players, st) {
@@ -95,7 +101,7 @@ function calcLad(players, st) {
   if (st.boxes && st.boxMatches) { st.boxes.forEach((box, bi) => { const bm = st.boxMatches.filter(m => m.box === bi); if (bm.length > 0 && bm.every(m => m.completed)) { const bs = boxSt(box.players, bm); if (bs[0] && s[bs[0].id]) { s[bs[0].id].points += 3; s[bs[0].id].boxPts += 3; } if (bs[1] && s[bs[1].id]) { s[bs[1].id].points += 1; s[bs[1].id].boxPts += 1; } } }); }
   (st.pastCycles || []).forEach(c => { (c.bonuses || []).forEach(b => { if (s[b.id] && b.pts > 0) s[b.id].boxPts += b.pts; }); });
   const t = nw(); players.forEach(p => { if (s[p.id].last && dd(t, s[p.id].last) > 42) s[p.id].inactive = true; });
-  return Object.values(s).sort((a, b) => { if (a.inactive !== b.inactive) return a.inactive ? 1 : -1; return b.points - a.points || b.wins - a.wins || b.rw - a.rw; });
+  return Object.values(s).sort((a, b) => { if (a.inactive !== b.inactive) return a.inactive ? 1 : -1; if (b.points !== a.points) return b.points - a.points; const h2h = getH2H(a.id, b.id, st); if (h2h && h2h.w1 !== h2h.w2) return h2h.w2 - h2h.w1; return b.wins - a.wins || b.rw - a.rw; });
 }
 
 // Head-to-head record between two players
@@ -238,7 +244,7 @@ function App() {
   const togCI = (id) => { save({ ...st, checkedIn: st.checkedIn.includes(id) ? st.checkedIn.filter(c => c !== id) : [...st.checkedIn, id] }); };
   const selAll = () => { save({ ...st, checkedIn: st.players.map(p => p.id) }); flash("All checked in!"); };
   const deselAll = () => { save({ ...st, checkedIn: [] }); flash("All unchecked"); };
-  const selLast = () => { const lb = st.boxes.length ? st.boxes : (st.pastCycles.length ? st.pastCycles[st.pastCycles.length - 1].boxes : []); if (!lb || !lb.length) { flash("No previous round"); return; } const ids = [...new Set(lb.flatMap(b => b.players))].filter(id => st.players.some(p => p.id === id)); save({ ...st, checkedIn: ids }); flash(ids.length + " from last round!"); };
+  const selLast = () => { if (!st.pastCycles.length) { flash("No previous round"); return; } const lastC = st.pastCycles[st.pastCycles.length - 1]; const allM = [...(lastC.boxMatches || []), ...(lastC.wildCards || []), ...(lastC.openChallenges || [])].filter(m => m.completed && !m.forfeit); const ids = [...new Set(allM.flatMap(m => [m.player1, m.player2]))].filter(id => st.players.some(p => p.id === id)); if (!ids.length) { flash("No previous round"); return; } save({ ...st, checkedIn: ids }); flash(ids.length + " from last round!"); };
   const completeCyc = () => {
     const bon = [];
     if (st.boxes) st.boxes.forEach((box, bi) => { const bm = (st.boxMatches || []).filter(m => m.box === bi); if (bm.length > 0 && bm.every(m => m.completed)) { const bs = boxSt(box.players, bm); if (bs[0]) bon.push({ id: bs[0].id, pts: 3 }); if (bs[1]) bon.push({ id: bs[1].id, pts: 1 }); } });
@@ -281,6 +287,7 @@ function App() {
         @keyframes orbFloat1{0%,100%{transform:translate(0,0)}50%{transform:translate(-30px,25px)}}
         @keyframes orbFloat2{0%,100%{transform:translate(0,0)}50%{transform:translate(25px,-20px)}}
         @keyframes orbFloat3{0%,100%{transform:translate(0,0)}50%{transform:translate(-20px,30px)}}
+        @keyframes tieFlash{0%,100%{border-color:rgba(241,138,0,.25);background:rgba(241,138,0,.06)}50%{border-color:rgba(241,138,0,.8);background:rgba(241,138,0,.18)}}
         @keyframes navBounce{0%{transform:scale(1) translateY(0)}30%{transform:scale(1.35) translateY(-5px)}60%{transform:scale(.95) translateY(1px)}100%{transform:scale(1) translateY(0)}}
         @keyframes glowBurst{0%{opacity:.7;transform:translate(-50%,-50%) scale(.4)}100%{opacity:0;transform:translate(-50%,-50%) scale(2.2)}}
         @keyframes shimmer{0%{background-position:200% center}100%{background-position:-200% center}}
@@ -547,7 +554,7 @@ function BoxesV({ st, gn, ini }) {
   const togCol = (k) => setCol(c => ({ ...c, [k]: !c[k] }));
   return (
     <div style={{ paddingTop: 16 }}><Tt>Boxes — Round {st.cycleNumber}</Tt>
-      {st.boxes.map((box, bi) => { const bm = st.boxMatches.filter(m => m.box === bi); const bs = boxSt(box.players, bm); const pids = bs.map(s => s.id); const done = bm.length > 0 && bm.every(m => m.completed); const isCol = col["box_" + bi];
+      {st.boxes.map((box, bi) => { const bm = st.boxMatches.filter(m => m.box === bi); const bs = boxSt(box.players, bm); const pids = bs.map(s => s.id); const done = bm.length > 0 && bm.every(m => m.completed); const isCol = col["box_" + bi]; const tiedTop = done && bs.length >= 2 ? bs.filter(p => p.pts === bs[0].pts) : []; const hasTie = tiedTop.length >= 2;
         return (
           <div key={bi} style={{ marginBottom: 16 }}>
             <div onClick={() => togCol("box_" + bi)} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, cursor: "pointer", userSelect: "none" }}>
@@ -560,6 +567,7 @@ function BoxesV({ st, gn, ini }) {
               <tbody>{pids.map((pid, ri) => (<tr key={pid}><td style={{ ...gtd, textAlign: "left", fontWeight: 600, fontSize: 12 }}>{gn(pid)}</td><td style={{ ...gtd, fontWeight: 700, color: P.orange }}>{bs[ri] ? bs[ri].pts : 0}</td>
                 {pids.map(oid => { if (pid === oid) return <td key={oid} style={{ ...gtd, background: "rgba(0,48,82,.4)" }} />; const sc = getS(bm, pid, oid); if (!sc) return <td key={oid} style={{ ...gtd, color: P.dim }}>{"—"}</td>; if (sc.pending) return <td key={oid} style={{ ...gtd, background: "rgba(241,138,0,.12)" }}><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: P.orange, animation: "pulse 1.8s infinite" }} /></td>; if (sc.s1 === 0 && sc.s2 === 0) return <td key={oid} style={{ ...gtd, color: P.dim, fontSize: 10, fontStyle: "italic" }}>FF</td>; const w = sc.s1 > sc.s2; return <td key={oid} style={{ ...gtd, fontWeight: 700, color: w ? P.ok : P.bad, background: w ? "rgba(52,211,153,.08)" : "rgba(248,113,113,.06)" }}>{sc.s1}-{sc.s2}</td>; })}
               </tr>))}</tbody></table></div></div>}
+            {!isCol && done && hasTie && (() => { const p0 = tiedTop[0], p1 = tiedTop[1]; const h2hM = bm.filter(m => m.completed && !m.forfeit && ((m.player1 === p0.id && m.player2 === p1.id) || (m.player1 === p1.id && m.player2 === p0.id))); let p0W = 0, p1W = 0; h2hM.forEach(m => { if ((m.player1 === p0.id && m.score1 > m.score2) || (m.player2 === p0.id && m.score2 > m.score1)) p0W++; else p1W++; }); const winner = p0W >= p1W ? p0 : p1; return (<div style={{ marginTop: 6, border: "1px solid", borderRadius: 12, padding: "10px 14px", animation: "tieFlash 1.4s ease-in-out infinite", textAlign: "center" }}><p style={{ fontSize: 8, fontWeight: 700, letterSpacing: 3, color: P.orange, marginBottom: 8 }}>{"\u26a1"} TIEBREAKER</p><div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}><span style={{ fontSize: 13, fontWeight: 700, color: winner.id === p0.id ? P.ok : P.dim, flex: 1, textAlign: "right" }}>{gn(p0.id)}</span><div style={{ textAlign: "center" }}><div style={{ display: "flex", gap: 6, alignItems: "center" }}><span style={{ fontSize: 22, fontWeight: 700, color: winner.id === p0.id ? P.ok : P.off }}>{p0W}</span><span style={{ fontSize: 11, color: P.dim }}>H2H</span><span style={{ fontSize: 22, fontWeight: 700, color: winner.id === p1.id ? P.ok : P.off }}>{p1W}</span></div></div><span style={{ fontSize: 13, fontWeight: 700, color: winner.id === p1.id ? P.ok : P.dim, flex: 1 }}>{gn(p1.id)}</span></div><p style={{ fontSize: 11, fontWeight: 700, color: P.orange, marginTop: 8 }}>{gn(winner.id)} wins the box {"\ud83c\udfc6"}</p></div>); })()}
             {!isCol && done && <div style={{ display: "flex", gap: 12, marginTop: 6 }}><span style={{ fontSize: 10, color: P.orange }}>{"\ud83e\udd47"} {gn(bs[0] ? bs[0].id : "")} (+3)</span>{bs[1] && <span style={{ fontSize: 10, color: P.grey }}>{"\ud83e\udd48"} {gn(bs[1].id)} (+1)</span>}</div>}
           </div>); })}
       {st.wildCards && st.wildCards.length > 0 && (
@@ -837,7 +845,7 @@ function RulesV() {
                 </div>
               ))}
             </div>
-            <p style={{ fontSize: 10, color: P.dim, marginTop: 8 }}>Tiebreaker: head-to-head result, then total racks won.</p>
+            <p style={{ fontSize: 10, color: P.dim, marginTop: 8 }}>Tiebreaker: head-to-head record, then total wins, then total racks won.</p>
           </Section>
           <Section title="End-of-Round Bonuses">
             <p style={{ fontSize: 11, color: P.dim, marginBottom: 12 }}>Awarded automatically when all matches in a box are complete.</p>
