@@ -217,13 +217,13 @@ function App() {
   const togCI = (id) => { save({ ...st, checkedIn: st.checkedIn.includes(id) ? st.checkedIn.filter(c => c !== id) : [...st.checkedIn, id] }); };
   const selAll = () => { save({ ...st, checkedIn: st.players.map(p => p.id) }); flash("All checked in!"); };
   const deselAll = () => { save({ ...st, checkedIn: [] }); flash("All unchecked"); };
-  const selLast = () => { const lb = st.boxes.length ? st.boxes : (st.pastCycles.length ? st.pastCycles[st.pastCycles.length - 1].boxes : []); if (!lb || !lb.length) { flash("No previous cycle"); return; } const ids = [...new Set(lb.flatMap(b => b.players))].filter(id => st.players.some(p => p.id === id)); save({ ...st, checkedIn: ids }); flash(ids.length + " from last cycle!"); };
+  const selLast = () => { const lb = st.boxes.length ? st.boxes : (st.pastCycles.length ? st.pastCycles[st.pastCycles.length - 1].boxes : []); if (!lb || !lb.length) { flash("No previous round"); return; } const ids = [...new Set(lb.flatMap(b => b.players))].filter(id => st.players.some(p => p.id === id)); save({ ...st, checkedIn: ids }); flash(ids.length + " from last round!"); };
   const completeCyc = () => {
     const bon = [];
     if (st.boxes) st.boxes.forEach((box, bi) => { const bm = (st.boxMatches || []).filter(m => m.box === bi); if (bm.length > 0 && bm.every(m => m.completed)) { const bs = boxSt(box.players, bm); if (bs[0]) bon.push({ id: bs[0].id, pts: 3 }); if (bs[1]) bon.push({ id: bs[1].id, pts: 1 }); } });
     const past = st.cycleNumber > 0 ? [...st.pastCycles, { cycle: st.cycleNumber, boxMatches: st.boxMatches || [], wildCards: st.wildCards || [], openChallenges: st.openChallenges || [], boxes: st.boxes || [], bonuses: [...bon], startedAt: st.cycleStart }] : st.pastCycles;
-    save(withLog({ ...st, pastCycles: past, boxes: [], boxMatches: [], wildCards: [], openChallenges: [] }, "CYCLE_COMPLETED", "Cycle " + st.cycleNumber));
-    flash("Cycle " + st.cycleNumber + " complete!");
+    save(withLog({ ...st, pastCycles: past, boxes: [], boxMatches: [], wildCards: [], openChallenges: [] }, "CYCLE_COMPLETED", "Round " + st.cycleNumber));
+    flash("Round " + st.cycleNumber + " complete!");
   };
   const startCyc = () => {
     if (st.checkedIn.length < 4) { flash("Need 4+"); return; }
@@ -238,8 +238,8 @@ function App() {
     const nl = calcLad(st.players, { ...st, pastCycles: past, boxMatches: [], wildCards: [], openChallenges: [], boxes: [] });
     const boxes = buildBoxes(st.checkedIn, nl); const bm = genBM(boxes); const wc = genWC(boxes);
     const ns = { ...st, pastCycles: past, boxes, boxMatches: bm, wildCards: wc, openChallenges: [], cycleStart: nw(), cycleNumber: st.cycleNumber + 1 };
-    save(withLog(ns, "CYCLE_STARTED", "Cycle " + (st.cycleNumber + 1)));
-    flash("Cycle " + (st.cycleNumber + 1) + " started!");
+    save(withLog(ns, "CYCLE_STARTED", "Round " + (st.cycleNumber + 1)));
+    flash("Round " + (st.cycleNumber + 1) + " started!");
   };
   const undoCyc = () => { if (st.cycleNumber < 1) return; const prev = st.pastCycles[st.pastCycles.length - 1]; const restore = arr => (arr || []).map(m => m.autoForfeit ? { ...m, score1: null, score2: null, completed: false, completedAt: null, forfeit: false, autoForfeit: false } : m); const base = prev ? { ...st, pastCycles: st.pastCycles.slice(0, -1), boxes: prev.boxes || [], boxMatches: restore(prev.boxMatches), wildCards: restore(prev.wildCards), openChallenges: prev.openChallenges || [], cycleStart: prev.startedAt, cycleNumber: st.cycleNumber - 1 } : { ...st, boxes: [], boxMatches: [], wildCards: [], openChallenges: [], cycleStart: null, cycleNumber: 0 }; save(withLog(base, "CYCLE_UNDONE", "Cycle " + st.cycleNumber)); flash("Undone!"); };
   const logR = (id, s1, s2, list) => { const m = st[list].find(x => x.id === id); const det = m ? gn(m.player1) + " " + s1 + "-" + s2 + " " + gn(m.player2) : id; save(withLog({ ...st, [list]: st[list].map(m => m.id === id ? { ...m, score1: s1, score2: s2, completed: true, completedAt: nw(), forfeit: false } : m) }, "MATCH_RECORDED", det)); flash("Recorded!"); };
@@ -276,7 +276,7 @@ function App() {
         <div style={{ position: "absolute", width: 300, height: 300, borderRadius: "50%", background: "radial-gradient(circle, rgba(0,200,180,.08) 0%, transparent 65%)", bottom: "-80px", right: "20%", animation: "orbFloat3 10s ease-in-out infinite" }} />
       </div>
       <div style={{ position: "sticky", top: 0, zIndex: 8, background: "rgba(255,255,255,.06)", backdropFilter: "blur(20px) saturate(150%)", WebkitBackdropFilter: "blur(20px) saturate(150%)", borderBottom: "1px solid rgba(255,255,255,.12)", boxShadow: "0 2px 20px rgba(0,0,0,.2), inset 0 1px 0 rgba(255,255,255,.15)", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 18px", animation: "slideDown .2s ease-out" }}>
-        {st.cycleStart ? <span style={{ fontSize: 11, fontWeight: 700, color: P.orange }}>Cycle {st.cycleNumber}</span> : <span style={{ fontSize: 11, color: P.dim }}>DRA Pool</span>}
+        {st.cycleStart ? <span style={{ fontSize: 11, fontWeight: 700, color: P.orange }}>Round {st.cycleNumber}</span> : <span style={{ fontSize: 11, color: P.dim }}>DRA Pool</span>}
         {st.cycleStart ? <span style={{ fontSize: 11, color: P.off }}>{cd.d}d {cd.h}h {cd.m}m left</span> : <span />}
         <button onClick={() => { setView("admin"); setNavIdx(-1); }} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, padding: "2px 4px", opacity: .45, lineHeight: 1 }}>🔒</button>
       </div>
@@ -344,7 +344,7 @@ function Home({ st, ladder, gn, ini, cd }) {
         <p style={{ fontSize: 10, background: "linear-gradient(90deg," + P.orange + "," + P.amber + "," + P.blue + "," + P.orange + ")", backgroundSize: "300% 100%", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text", letterSpacing: 6, textTransform: "uppercase", marginTop: 8, fontWeight: 700, animation: "shimmer 4s linear infinite" }}>POOL LEAGUE</p>
         {st.cycleNumber > 0 && (
           <div style={{ ...gc, display: "inline-flex", gap: 16, marginTop: 10, padding: "6px 18px", borderRadius: 20, marginBottom: 0 }}>
-            <span style={{ fontSize: 11, color: P.grey }}>Cycle {st.cycleNumber}</span>
+            <span style={{ fontSize: 11, color: P.grey }}>Round {st.cycleNumber}</span>
             <span style={{ fontSize: 11, color: P.orange, fontWeight: 700 }}>{cd.d}d {cd.h}h {cd.m}m</span>
             <span style={{ fontSize: 11, color: P.grey }}>{ladder.length} players</span>
           </div>
@@ -355,7 +355,7 @@ function Home({ st, ladder, gn, ini, cd }) {
       {st.cycleNumber > 0 && boxSummaries.length > 0 && (
         <div style={{ ...gc, padding: "12px 16px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-            <p style={{ fontSize: 9, color: P.blue, letterSpacing: 3, fontWeight: 700 }}>CYCLE {st.cycleNumber} PROGRESS</p>
+            <p style={{ fontSize: 9, color: P.blue, letterSpacing: 3, fontWeight: 700 }}>ROUND {st.cycleNumber} PROGRESS</p>
             <span style={{ fontSize: 10, color: P.dim }}>{totalDone} played · {totalPend} pending</span>
           </div>
           {boxSummaries.map(({ box, bi, done, total, bs, complete }) => (
@@ -379,7 +379,7 @@ function Home({ st, ladder, gn, ini, cd }) {
       {lastChamps.length > 0 && (
         <div style={{ ...gc, padding: "12px 16px", background: "linear-gradient(135deg, rgba(241,138,0,.12), rgba(21,152,203,.08))", borderColor: "rgba(241,138,0,.3)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <p style={{ fontSize: 9, color: P.orange, letterSpacing: 3, fontWeight: 700 }}>CYCLE {lastCyc.cycle} CHAMPIONS</p>
+            <p style={{ fontSize: 9, color: P.orange, letterSpacing: 3, fontWeight: 700 }}>ROUND {lastCyc.cycle} CHAMPIONS</p>
             {st.pastCycles.length > 1 && (
               <button onClick={() => setShowChampHistory(v => !v)} style={{ fontSize: 9, fontWeight: 700, padding: "3px 10px", borderRadius: 10, background: showChampHistory ? "rgba(241,138,0,.2)" : "transparent", border: "1px solid rgba(241,138,0,.4)", color: P.amber, cursor: "pointer" }}>
                 {"\ud83c\udfc6"} History {showChampHistory ? "▲" : "▼"}
@@ -399,7 +399,7 @@ function Home({ st, ladder, gn, ini, cd }) {
                 if (!cChamps.length) return null;
                 return (
                   <div key={c.cycle} style={{ marginBottom: 10 }}>
-                    <p style={{ fontSize: 9, color: P.dim, fontWeight: 700, letterSpacing: 1, marginBottom: 4 }}>CYCLE {c.cycle} · {fmtDate(c.startedAt)}</p>
+                    <p style={{ fontSize: 9, color: P.dim, fontWeight: 700, letterSpacing: 1, marginBottom: 4 }}>ROUND {c.cycle} · {fmtDate(c.startedAt)}</p>
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                       {cChamps.map((w, i) => <span key={i} style={{ fontSize: 10, color: P.off, background: "rgba(0,48,82,.4)", padding: "3px 8px", borderRadius: 6 }}>{"\ud83e\udd47"} {w.box}: {w.name}</span>)}
                     </div>
@@ -411,7 +411,7 @@ function Home({ st, ladder, gn, ini, cd }) {
         </div>
       )}
 
-      {!st.cycleNumber && <div style={{ textAlign: "center", padding: "40px 0" }}><p style={{ fontSize: 44 }}>{"\ud83c\udfb1"}</p><p style={{ color: P.grey, marginTop: 10 }}>No active cycle yet.</p></div>}
+      {!st.cycleNumber && <div style={{ textAlign: "center", padding: "40px 0" }}><p style={{ fontSize: 44 }}>{"\ud83c\udfb1"}</p><p style={{ color: P.grey, marginTop: 10 }}>No active round yet.</p></div>}
 
       {st.cycleNumber > 0 && ladder.length > 0 && (
         <div>
@@ -466,11 +466,11 @@ function Home({ st, ladder, gn, ini, cd }) {
 // ─── BOXES ───────────────────────────────────────────────────
 function BoxesV({ st, gn, ini }) {
   const [col, setCol] = useState({});
-  if (!st.boxes || !st.boxes.length) return <div style={{ textAlign: "center", padding: 50 }}><p style={{ fontSize: 44 }}>{"\ud83d\udcca"}</p><p style={{ color: P.grey }}>No active cycle.</p></div>;
+  if (!st.boxes || !st.boxes.length) return <div style={{ textAlign: "center", padding: 50 }}><p style={{ fontSize: 44 }}>{"\ud83d\udcca"}</p><p style={{ color: P.grey }}>No active round.</p></div>;
   const getS = (bm, p1, p2) => { const m = bm.find(m => (m.player1 === p1 && m.player2 === p2) || (m.player1 === p2 && m.player2 === p1)); if (!m) return null; if (!m.completed) return { pending: true }; return { s1: m.player1 === p1 ? m.score1 : m.score2, s2: m.player1 === p1 ? m.score2 : m.score1 }; };
   const togCol = (k) => setCol(c => ({ ...c, [k]: !c[k] }));
   return (
-    <div style={{ paddingTop: 16 }}><Tt>Boxes — Cycle {st.cycleNumber}</Tt>
+    <div style={{ paddingTop: 16 }}><Tt>Boxes — Round {st.cycleNumber}</Tt>
       {st.boxes.map((box, bi) => { const bm = st.boxMatches.filter(m => m.box === bi); const bs = boxSt(box.players, bm); const pids = bs.map(s => s.id); const done = bm.length > 0 && bm.every(m => m.completed); const isCol = col["box_" + bi];
         return (
           <div key={bi} style={{ marginBottom: 16 }}>
@@ -502,7 +502,7 @@ function BoxesV({ st, gn, ini }) {
 // ─── MATCHES (with H2H) ─────────────────────────────────────
 function MatchesV({ st, gn, logR, ffM }) {
   const [sc, setSc] = useState(null); const [s1, setS1] = useState(2); const [s2, setS2] = useState(0);
-  if (!st.cycleNumber) return <div style={{ textAlign: "center", padding: 50 }}><p style={{ fontSize: 44 }}>{"\ud83d\udcc5"}</p><p style={{ color: P.grey }}>No active cycle.</p></div>;
+  if (!st.cycleNumber) return <div style={{ textAlign: "center", padding: 50 }}><p style={{ fontSize: 44 }}>{"\ud83d\udcc5"}</p><p style={{ color: P.grey }}>No active round.</p></div>;
   const valid = (s1 === 2 && s2 < 2) || (s2 === 2 && s1 < 2);
   const sub = (id, list) => { if (valid) { logR(id, s1, s2, list); setSc(null); setS1(2); setS2(0); } };
   const rm = (m, list, label, color) => {
@@ -549,7 +549,7 @@ function MatchesV({ st, gn, logR, ffM }) {
   const bP = (st.boxMatches || []).filter(m => !m.completed), bD = (st.boxMatches || []).filter(m => m.completed);
   const wP = (st.wildCards || []).filter(m => !m.completed), wD = (st.wildCards || []).filter(m => m.completed);
   const oP = (st.openChallenges || []).filter(m => !m.completed), oD = (st.openChallenges || []).filter(m => m.completed);
-  return (<div style={{ paddingTop: 16 }}><Tt>Cycle {st.cycleNumber} Matches</Tt>
+  return (<div style={{ paddingTop: 16 }}><Tt>Round {st.cycleNumber} Matches</Tt>
     {bP.length > 0 && <div><SecHdr k="bp" label={"Box — Pending (" + bP.length + ")"} />{!col["bp"] && bP.map(m => rm(m, "boxMatches", "BOX", P.orange))}</div>}
     {wP.length > 0 && <div><SecHdr k="wp" label={"Wild Cards — Pending (" + wP.length + ")"} />{!col["wp"] && wP.map(m => rm(m, "wildCards", "WILD CARD", "#C4A1FF"))}</div>}
     {oP.length > 0 && <div><SecHdr k="op" label={"Open — Pending (" + oP.length + ")"} />{!col["op"] && oP.map(m => rm(m, "openChallenges", "OPEN", P.blue))}</div>}
@@ -677,12 +677,13 @@ function RulesV() {
     ["2. Take What You Make", "Whichever group (solids or stripes) you pocket more of on the break becomes yours. If you make one of each, the table stays open."],
     ["3. Eight-Ball on the Break", "Pocket the 8-ball on the break without scratching or jumping the cue ball = instant win."],
     ["4. Scratch on a Legal Break", "Scratching on the break is never a loss (unless the 8 also drops). Opponent gets ball-in-hand behind the kitchen. No debates about where the base of the ball is."],
-    ["5. Play Out of the Kitchen", "When the cue ball is behind the break line, your first hit must contact a ball or rail outside the kitchen."],
-    ["6. Hit Your Own Balls First", "Must contact one of your own balls before anything else. Failure = loss of turn only — no ball-in-hand. Doing this on purpose is dirty pool."],
-    ["7. Balls Stay Down", "If you make a ball and scratch, that ball still counts and stays pocketed."],
-    ["8. Soft Calling (Be Honest)", "You don't need to call banks, kisses, or combos — just be honest about your intent. You may keep shooting only if you intended to make that ball, even if it drops in a different pocket. Accidentally making your opponent's ball = loss of turn."],
-    ["9. Eight-Ball Rules", "The 8-ball must be called, but you don't have to call the shot type. The 8-ball cannot be used in a combo. Hitting an opponent's ball first while shooting the 8 = loss of turn. Scratching or jumping the cue ball while shooting the 8 = loss of game."],
-    ["10. Sportsmanship", "Safeties are dirty pool unless they result from a genuine attempt to make a ball or break a cluster. If all your balls are tied up and there's truly no shot, say: \"Dude, I got nothing.\" Then play a shot that opens things up. Rail nursing or lagging the cue ball without touching the cluster will not be tolerated. Disputes = replay the shot. No arguments."],
+    ["5. Regular Scratch — Ball-in-Hand", "If you scratch (cue ball into a pocket) at any point during normal play, your opponent gets ball-in-hand anywhere on the table. They may place the cue ball wherever they choose before shooting."],
+    ["6. Play Out of the Kitchen", "When the cue ball is behind the break line, your first hit must contact a ball or rail outside the kitchen. A scratch in this situation results in ball-in-hand behind the kitchen — not anywhere on the table."],
+    ["7. Hit Your Own Balls First", "Must contact one of your own balls before anything else. Failure = loss of turn only — no ball-in-hand. Doing this on purpose is dirty pool."],
+    ["8. Balls Stay Down", "If you make a ball and scratch, that ball still counts and stays pocketed."],
+    ["9. Soft Calling (Be Honest)", "You don't need to call banks, kisses, or combos — just be honest about your intent. You may keep shooting only if you intended to make that ball, even if it drops in a different pocket. Accidentally making your opponent's ball = loss of turn."],
+    ["10. Eight-Ball Rules", "The 8-ball must be called, but you don't have to call the shot type. The 8-ball cannot be used in a combo. Hitting an opponent's ball first while shooting the 8 = loss of turn. Scratching or jumping the cue ball while shooting the 8 = loss of game."],
+    ["11. Sportsmanship", "Safeties are dirty pool unless they result from a genuine attempt to make a ball or break a cluster. If all your balls are tied up and there's truly no shot, say: \"I got nothing.\" Then play a shot that opens things up. Rail nursing or lagging the cue ball without touching the cluster will not be tolerated. Disputes = replay the shot. No arguments."],
   ];
   return (
     <div style={{ paddingTop: 16 }}>
@@ -703,9 +704,9 @@ function RulesV() {
             <Row title="Disputes" body="If a situation isn't covered, default to the DRA House Bar Rules. Universal rule: if there's a dispute — replay the shot. No exceptions." last />
           </Section>
           <Section title="League Format">
-            <Row title="Box Structure" body="Players are grouped into boxes of up to 4. Full round-robin within each box — 3 matches per cycle. New/returning players start in the Swing Box." />
-            <Row title="Promotion & Relegation" body="Top player in each box moves up one division at cycle end. Bottom player in each box moves down one division. New players are placed in the lowest available box for their first cycle." />
-            <Row title="Wild Cards" body="Each player gets 1 wild card cross-box match per cycle, randomly assigned." />
+            <Row title="Box Structure" body="Players are grouped into boxes of up to 4. Full round-robin within each box — 3 matches per round. New/returning players start in the Swing Box." />
+            <Row title="Promotion & Relegation" body="Boxes are re-seeded each round based on ladder rank — the top-ranked players form Box 1, working down to the Swing Box. Win matches and earn points to climb the standings and earn a spot in a higher box next round. New players start in the Swing Box." />
+            <Row title="Wild Cards" body="Each player gets 1 wild card cross-box match per round, randomly assigned." />
             <Row title="Open Challenges" body="Open Challenges are unlimited — challenge anyone in the office for a bonus point. No penalty for a loss." />
             <Row title="Inactivity" body="No match in 42 days → marked inactive and dropped to the bottom of the standings." last />
           </Section>
@@ -742,7 +743,7 @@ function RulesV() {
             </div>
             <p style={{ fontSize: 10, color: P.dim, marginTop: 8 }}>Tiebreaker: head-to-head result, then total racks won.</p>
           </Section>
-          <Section title="End-of-Cycle Bonuses">
+          <Section title="End-of-Round Bonuses">
             <p style={{ fontSize: 11, color: P.dim, marginBottom: 12 }}>Awarded automatically when all matches in a box are complete.</p>
             <div style={{ borderRadius: 12, overflow: "hidden", border: "1px solid rgba(255,255,255,.1)" }}>
               {[
@@ -776,7 +777,7 @@ function RulesV() {
             </div>
           </Section>
           <div style={{ ...gc, background: "rgba(21,152,203,.06)", border: "1px solid rgba(21,152,203,.2)" }}>
-            <h4 style={{ fontSize: 13, fontWeight: 700, color: P.blue, marginBottom: 10 }}>Best Possible Cycle</h4>
+            <h4 style={{ fontSize: 13, fontWeight: 700, color: P.blue, marginBottom: 10 }}>Best Possible Round</h4>
             <p style={{ fontSize: 12, color: P.grey, lineHeight: 1.8 }}>
               3× shutout box wins (3 × 5) → <span style={{ color: P.orange, fontWeight: 700 }}>15 pts</span><br />
               Box winner bonus → <span style={{ color: P.orange, fontWeight: 700 }}>+3 pts</span><br />
@@ -853,7 +854,7 @@ function PastCycleRow({ c, gn, cycleIdx, saveCycle }) {
     <div style={{ borderBottom: "1px solid rgba(21,152,203,.08)", paddingBottom: open ? 14 : 0, marginBottom: 8 }}>
       <div onClick={() => setOpen(v => !v)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 0", cursor: "pointer", userSelect: "none" }}>
         <div>
-          <span style={{ fontWeight: 700, color: P.orange, fontSize: 14 }}>Cycle {c.cycle}</span>
+          <span style={{ fontWeight: 700, color: P.orange, fontSize: 14 }}>Round {c.cycle}</span>
           <span style={{ fontSize: 10, color: P.dim, marginLeft: 8 }}>{fmtDate(c.startedAt)}</span>
         </div>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
@@ -867,7 +868,7 @@ function PastCycleRow({ c, gn, cycleIdx, saveCycle }) {
         <div>
           {/* Champions callout */}
           <div style={{ background: "rgba(255,184,0,.06)", border: "1px solid rgba(255,184,0,.15)", borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
-            <p style={{ fontSize: 9, color: P.amber, fontWeight: 700, letterSpacing: 2, marginBottom: 8 }}>CYCLE CHAMPIONS</p>
+            <p style={{ fontSize: 9, color: P.amber, fontWeight: 700, letterSpacing: 2, marginBottom: 8 }}>ROUND CHAMPIONS</p>
             {champions.map((ch, i) => ch.winner && (
               <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
                 <span style={{ fontSize: 9, color: ch.isSwing ? P.blue : P.dim, fontWeight: 700, width: 62, letterSpacing: 1, flexShrink: 0 }}>{ch.boxName.toUpperCase()}</span>
@@ -1085,10 +1086,10 @@ function AdminV({ st, ladder, startCyc, completeCyc, undoCyc, resetAll, addP, rm
       </div>}
     </div>
 
-    <div style={gc}><h4 style={{ fontSize: 15, fontWeight: 600, color: P.white, marginBottom: 6, fontFamily: "Georgia,serif" }}>Cycle Duration</h4>
+    <div style={gc}><h4 style={{ fontSize: 15, fontWeight: 600, color: P.white, marginBottom: 6, fontFamily: "Georgia,serif" }}>Round Duration</h4>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <input type="number" min="1" max="12" value={st.cycleDurationWeeks || 4} onChange={e => save({ ...st, cycleDurationWeeks: Math.max(1, Math.min(12, +e.target.value || 1)) })} style={{ ...ssS, width: 70, marginBottom: 0, textAlign: "center" }} />
-        <span style={{ fontSize: 12, color: P.grey }}>weeks per cycle</span>
+        <span style={{ fontSize: 12, color: P.grey }}>weeks per round</span>
       </div>
     </div>
 
@@ -1096,40 +1097,40 @@ function AdminV({ st, ladder, startCyc, completeCyc, undoCyc, resetAll, addP, rm
       const allDone = st.cycleNumber > 0 && (st.boxes||[]).length > 0 && (st.boxMatches||[]).every(m => m.completed) && (st.wildCards||[]).every(m => m.completed);
       const cycleComplete = st.cycleNumber > 0 && (st.boxes||[]).length === 0;
       return (
-        <div style={gc}><h4 style={{ fontSize: 15, fontWeight: 600, color: P.white, marginBottom: 6, fontFamily: "Georgia,serif" }}>Cycles</h4>
+        <div style={gc}><h4 style={{ fontSize: 15, fontWeight: 600, color: P.white, marginBottom: 6, fontFamily: "Georgia,serif" }}>Rounds</h4>
           <p style={{ fontSize: 12, color: P.grey, marginBottom: 10 }}>
-            {!st.cycleNumber ? "No active cycle." : cycleComplete ? "Cycle " + st.cycleNumber + " complete. Ready for next." : "Cycle " + st.cycleNumber + ". " + pend + " pending. " + st.checkedIn.length + " checked in."}
+            {!st.cycleNumber ? "No active round." : cycleComplete ? "Round " + st.cycleNumber + " complete. Ready for next." : "Round " + st.cycleNumber + ". " + pend + " pending. " + st.checkedIn.length + " checked in."}
           </p>
           {allDone && (
             <div style={{ background: "rgba(52,211,153,.08)", border: "1px solid rgba(52,211,153,.25)", borderRadius: 12, padding: "10px 14px", marginBottom: 8 }}>
               <p style={{ fontSize: 12, color: P.ok, fontWeight: 700, marginBottom: 6 }}>✓ All matches complete</p>
-              <button onClick={() => completeCyc()} style={{ ...bpS, background: "linear-gradient(135deg,#34D399,#059669)", marginTop: 0 }}>Complete Cycle {st.cycleNumber}</button>
+              <button onClick={() => completeCyc()} style={{ ...bpS, background: "linear-gradient(135deg,#34D399,#059669)", marginTop: 0 }}>Complete Round {st.cycleNumber}</button>
             </div>
           )}
           {!allDone && !cycleComplete && (
             st.checkedIn.length < 4 ? <p style={{ fontSize: 11, color: P.bad }}>Need 4+ ({st.checkedIn.length})</p>
-            : cc ? <div>{pend > 0 && <p style={{ fontSize: 11, color: P.bad, marginBottom: 6 }}>{pend} pending — will auto-forfeit</p>}<button onClick={() => { startCyc(); setCc(false); }} style={bpS}>Start Cycle {st.cycleNumber + 1}</button><button onClick={() => setCc(false)} style={bcS}>Cancel</button></div>
-            : <button onClick={() => setCc(true)} style={bpS}>Start Cycle {st.cycleNumber + 1}</button>
+            : cc ? <div>{pend > 0 && <p style={{ fontSize: 11, color: P.bad, marginBottom: 6 }}>{pend} pending — will auto-forfeit</p>}<button onClick={() => { startCyc(); setCc(false); }} style={bpS}>Start Round {st.cycleNumber + 1}</button><button onClick={() => setCc(false)} style={bcS}>Cancel</button></div>
+            : <button onClick={() => setCc(true)} style={bpS}>Start Round {st.cycleNumber + 1}</button>
           )}
           {cycleComplete && (
             st.checkedIn.length < 4 ? <p style={{ fontSize: 11, color: P.bad }}>Need 4+ to start ({st.checkedIn.length} checked in)</p>
-            : cc ? <div><button onClick={() => { startCyc(); setCc(false); }} style={bpS}>Start Cycle {st.cycleNumber + 1}</button><button onClick={() => setCc(false)} style={bcS}>Cancel</button></div>
-            : <button onClick={() => setCc(true)} style={bpS}>Start Cycle {st.cycleNumber + 1}</button>
+            : cc ? <div><button onClick={() => { startCyc(); setCc(false); }} style={bpS}>Start Round {st.cycleNumber + 1}</button><button onClick={() => setCc(false)} style={bcS}>Cancel</button></div>
+            : <button onClick={() => setCc(true)} style={bpS}>Start Round {st.cycleNumber + 1}</button>
           )}
         </div>
       );
     })()}
 
     {st.cycleNumber > 0 && (st.boxes||[]).length > 0 && <div style={gc}><h4 style={{ fontSize: 15, fontWeight: 600, color: P.white, marginBottom: 6, fontFamily: "Georgia,serif" }}>Undo</h4>
-      {cu ? <div><p style={{ fontSize: 11, color: P.bad, marginBottom: 6 }}>Delete Cycle {st.cycleNumber}?</p><button onClick={() => { undoCyc(); setCu(false); }} style={{ ...bpS, background: P.amber, color: P.navy }}>Yes</button><button onClick={() => setCu(false)} style={bcS}>Cancel</button></div>
-        : <button onClick={() => setCu(true)} style={{ ...bpS, background: "transparent", border: "1px solid " + P.amber, color: P.amber }}>Undo Cycle {st.cycleNumber}</button>}</div>}
+      {cu ? <div><p style={{ fontSize: 11, color: P.bad, marginBottom: 6 }}>Delete Round {st.cycleNumber}?</p><button onClick={() => { undoCyc(); setCu(false); }} style={{ ...bpS, background: P.amber, color: P.navy }}>Yes</button><button onClick={() => setCu(false)} style={bcS}>Cancel</button></div>
+        : <button onClick={() => setCu(true)} style={{ ...bpS, background: "transparent", border: "1px solid " + P.amber, color: P.amber }}>Undo Round {st.cycleNumber}</button>}</div>}
 
     {(st.pastCycles || []).length > 0 && (
       <div style={gc}>
-        <h4 style={{ fontSize: 15, fontWeight: 600, color: P.white, fontFamily: "Georgia,serif", marginBottom: 10 }}>Past Cycles</h4>
+        <h4 style={{ fontSize: 15, fontWeight: 600, color: P.white, fontFamily: "Georgia,serif", marginBottom: 10 }}>Past Rounds</h4>
         {[...(st.pastCycles || [])].reverse().map((c, revIdx) => {
           const cycleIdx = st.pastCycles.length - 1 - revIdx;
-          const saveCycle = (idx, updated) => save(withLog({ ...st, pastCycles: st.pastCycles.map((x, i) => i === idx ? updated : x) }, "CYCLE_OVERRIDE", "Cycle " + updated.cycle));
+          const saveCycle = (idx, updated) => save(withLog({ ...st, pastCycles: st.pastCycles.map((x, i) => i === idx ? updated : x) }, "CYCLE_OVERRIDE", "Round " + updated.cycle));
           return <PastCycleRow key={c.cycle} c={c} gn={gn} cycleIdx={cycleIdx} saveCycle={saveCycle} />;
         })}
       </div>
