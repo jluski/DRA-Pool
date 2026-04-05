@@ -27,7 +27,7 @@ const { useState, useEffect, useCallback } = React;
 
 
 const fmtDate = (iso) => { if (!iso) return ""; const d = new Date(iso); return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); };
-const P = { navy:"#001B36", mid:"#003052", blue:"#1598CB", orange:"#F18A00", amber:"#FFAD33", white:"#FFF", off:"#C8DAE8", grey:"#7B95AA", dim:"#4A6275", glass:"rgba(255,255,255,.05)", gb:"rgba(255,255,255,.12)", ok:"#34D399", bad:"#F87171", glow:"rgba(21,152,203,.25)" };
+const P = { navy:"#001B36", mid:"#003052", blue:"#1598CB", orange:"#F18A00", amber:"#FFAD33", white:"#FFF", off:"#C8DAE8", grey:"#7B95AA", dim:"#4A6275", glass:"rgba(255,255,255,.05)", gb:"rgba(255,255,255,.12)", ok:"#34D399", bad:"#F87171" };
 const uid = () => Math.random().toString(36).slice(2, 9);
 const nw = () => new Date().toISOString();
 const dd = (a, b) => Math.abs(new Date(a) - new Date(b)) / 864e5;
@@ -141,39 +141,6 @@ function getChampions(st, gn) {
   return champs;
 }
 
-// Get current box winners for ALL boxes
-function getBoxWinners(st, gn) {
-  if (!st.boxes || !st.boxMatches) return [];
-  const winners = [];
-  st.boxes.forEach((box, bi) => {
-    const bm = st.boxMatches.filter(m => m.box === bi);
-    if (bm.length > 0 && bm.every(m => m.completed)) {
-      const bs = boxSt(box.players, bm);
-      if (bs[0]) winners.push({ box: box.name, id: bs[0].id, name: gn(bs[0].id), isBox1: bi === 0 && !box.isSwing });
-    }
-  });
-  return winners;
-}
-
-// Rank changes: compare current ladder position to previous cycle's ladder
-function getRankChanges(ladder, st, players) {
-  if (!st.pastCycles || !st.pastCycles.length) return {};
-  const prevSt = { ...st, boxMatches: [], wildCards: [], openChallenges: [], boxes: [], pastCycles: st.pastCycles.slice(0, -1) };
-  // Add the second-to-last cycle's data
-  const lastCyc = st.pastCycles[st.pastCycles.length - 1];
-  if (lastCyc) { prevSt.boxMatches = lastCyc.boxMatches || []; prevSt.wildCards = lastCyc.wildCards || []; prevSt.openChallenges = lastCyc.openChallenges || []; prevSt.boxes = lastCyc.boxes || []; }
-  const prevLad = calcLad(players, prevSt);
-  const prevRank = {}; prevLad.forEach((s, i) => { prevRank[s.id] = i; });
-  const changes = {};
-  ladder.forEach((s, i) => {
-    const prev = prevRank[s.id];
-    if (prev === undefined) changes[s.id] = "new";
-    else if (prev > i) changes[s.id] = prev - i;
-    else if (prev < i) changes[s.id] = -(i - prev);
-    else changes[s.id] = 0;
-  });
-  return changes;
-}
 
 const PLAYERS = ["Gianna Acitelli","Elvira Aguillon","Koula Angelinas","Jean Marie Apruzzese","Gerard Apruzzese","Frank Banta","Bart Bess","Glen Besser","Sreyansh Biswal","Amanda Bloshuk","Eduardo Bonilla","Jason Borreo","Brad Boyle","Adam Breen","Duncan Brennan","Kenneth Carpenter","Hans Castaneda","Miguel Castro","Karen Chen","Steven Ciardiello","Dan Conlisk","Christopher Cook","Bridget Cooney","Rafael Cordero","Mike Cottam","Nicholas Cresta","Shawn Dacey","Zahra Derrick","James Driscoll","Matthew Farina","Susan Fattorusso","Lucy Ferrantelli","Sandy French","Daniel Giordano","Daniel Goldman","Brett Gottlieb","Korey Grabowski","Daniel Graham","David Gray","Andrew Grider","Max Gustafson","John Haaf","Melissa Haime","Christopher Halloran","William Hankers","Jake Hannah","Lauren Hayes","Anthony Helmandollar","Ian Holland","Hussein Hussein","Robert Hyman","Peter Ibelli","Patrick Judge","Brian Kittner","Sam Klaber","Jared Konigsberg","John Kopans","Werner Kratovil","Jonathan Lea","Jeffrey Lehrman","Christopher Lepore","Wei Lin","Jack Linehan","David Luski","Jason Luski","Shayne Lyons","Sloan Martin","Gabriella Mascellino","Quinn McQuade","Adam Melnick","Mario Minera","Anna Ming","Cristin Mitchell","Melanie Mohr","Indira Negron","Payton Odom","Peter Papadakos","Anjali Pharsi","Regina Poniros","Delaney Reynolds","Stephanie Rivera","Janine Roberts","Maria Rodriguez","Charles Ruotolo","Michelle Santos","Merritt Scott","John Serzan","Tracy Shi","Matt Shore","Tracy Sonnabend","Kim Stirba","Carol Su","Stephen Suriano","Aaron Talan","Amanda Taylor","Anthony Venditti","Ivan Vidal","Hope Wasserman","Andrew Wietstock","Liying Yang","Thomas Yang","Ashley Yip","Michael Yurick"].map(n => ({ id: uid(), name: n, joinedAt: nw() }));
 const DEF = { players: PLAYERS, boxes: [], boxMatches: [], wildCards: [], openChallenges: [], checkedIn: [], pastCycles: [], cycleNumber: 0, cycleStart: null, cycleDurationWeeks: 4, auditLog: [], adminPin: null };
@@ -235,15 +202,11 @@ function App() {
   const activeLad = ladder.filter(s => activeIds.has(s.id));
   const gn = (id) => { if (!st) return "?"; const p = st.players.find(x => x.id === id); return p ? p.name : "?"; };
   const ini = (id) => gn(id).split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 3);
-  const boxWinners = st ? getBoxWinners(st, gn) : [];
-
   if (!st) return <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: P.navy }}><div style={{ width: 36, height: 36, border: "2px solid " + P.mid, borderTop: "2px solid " + P.orange, borderRadius: "50%", animation: "spin .7s linear infinite" }} /><style>{"@keyframes spin{to{transform:rotate(360deg)}}"}</style></div>;
 
   const addP = (n) => { if (!n.trim() || st.players.find(p => p.name.toLowerCase() === n.trim().toLowerCase())) { flash("Invalid/duplicate"); return; } const np = { id: uid(), name: n.trim(), joinedAt: nw() }; save(withLog({ ...st, players: [...st.players, np] }, "PLAYER_ADDED", n.trim())); flash(n.trim() + " joined!"); };
   const rmP = (id) => { const nm = (st.players.find(p => p.id === id) || {}).name || id; save(withLog({ ...st, players: st.players.filter(p => p.id !== id), checkedIn: st.checkedIn.filter(c => c !== id) }, "PLAYER_REMOVED", nm)); flash("Removed"); };
   const togCI = (id) => { save({ ...st, checkedIn: st.checkedIn.includes(id) ? st.checkedIn.filter(c => c !== id) : [...st.checkedIn, id] }); };
-  const selAll = () => { save({ ...st, checkedIn: st.players.map(p => p.id) }); flash("All checked in!"); };
-  const deselAll = () => { save({ ...st, checkedIn: [] }); flash("All unchecked"); };
   const selLast = () => { if (!st.pastCycles.length) { flash("No previous round"); return; } const lastC = st.pastCycles[st.pastCycles.length - 1]; const allM = [...(lastC.boxMatches || []), ...(lastC.wildCards || []), ...(lastC.openChallenges || [])].filter(m => m.completed && !m.forfeit); const ids = [...new Set(allM.flatMap(m => [m.player1, m.player2]))].filter(id => st.players.some(p => p.id === id)); if (!ids.length) { flash("No previous round"); return; } save({ ...st, checkedIn: ids }); flash(ids.length + " from last round!"); };
   const completeCyc = () => {
     const bon = [];
