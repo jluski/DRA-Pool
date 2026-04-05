@@ -33,8 +33,8 @@ const nw = () => new Date().toISOString();
 const dd = (a, b) => Math.abs(new Date(a) - new Date(b)) / 864e5;
 function shuf(a) { const b=[...a]; for(let i=b.length-1;i>0;i--){const j=0|Math.random()*(i+1);[b[i],b[j]]=[b[j],b[i]];} return b; }
 
-function buildBoxes(ids, lad) {
-  const rk = lad.filter(s => ids.includes(s.id)); const bx = []; let i = 0;
+function buildBoxes(ids, lad, randomize = false) {
+  let rk = lad.filter(s => ids.includes(s.id)); if (randomize) rk = shuf(rk); const bx = []; let i = 0;
   while (i < rk.length) { const rem = rk.length - i;
     if (rem <= 6) { bx.push({ name: "Swing Box", isSwing: true, players: rk.slice(i).map(s => s.id) }); break; }
     bx.push({ name: "Box " + (bx.length + 1), isSwing: false, players: rk.slice(i, i + 4).map(s => s.id) }); i += 4; }
@@ -249,7 +249,7 @@ function App() {
     save(withLog({ ...st, pastCycles: past, boxes: [], boxMatches: [], wildCards: [], openChallenges: [] }, "CYCLE_COMPLETED", "Round " + st.cycleNumber));
     flash("Round " + st.cycleNumber + " complete!");
   };
-  const startCyc = () => {
+  const startCyc = (randomize = false) => {
     if (st.checkedIn.length < 4) { flash("Need 4+"); return; }
     let past = st.pastCycles;
     if (st.cycleNumber > 0 && (st.boxes || []).length > 0) {
@@ -260,7 +260,7 @@ function App() {
       past = [...st.pastCycles, { cycle: st.cycleNumber, boxMatches: afBM, wildCards: afWC, openChallenges: st.openChallenges, boxes: st.boxes, bonuses: [...bon], startedAt: st.cycleStart }];
     }
     const nl = calcLad(st.players, { ...st, pastCycles: past, boxMatches: [], wildCards: [], openChallenges: [], boxes: [] });
-    const boxes = buildBoxes(st.checkedIn, nl); const bm = genBM(boxes); const wc = genWC(boxes);
+    const boxes = buildBoxes(st.checkedIn, nl, randomize); const bm = genBM(boxes); const wc = genWC(boxes);
     const ns = { ...st, pastCycles: past, boxes, boxMatches: bm, wildCards: wc, openChallenges: [], cycleStart: nw(), cycleNumber: st.cycleNumber + 1 };
     save(withLog(ns, "CYCLE_STARTED", "Round " + (st.cycleNumber + 1)));
     flash("Round " + (st.cycleNumber + 1) + " started!");
@@ -1160,7 +1160,7 @@ function PastCycleRow({ c, gn, cycleIdx, saveCycle }) {
 
 function AdminV({ st, ladder, startCyc, completeCyc, undoCyc, resetAll, addP, rmP, ffM, gn, save }) {
   const [pin, setPin] = useState(""); const [ok, setOk] = useState(false); const [err, setErr] = useState(false);
-  const [cc, setCc] = useState(false); const [cr, setCr] = useState(false); const [cu, setCu] = useState(false);
+  const [cc, setCc] = useState(false); const [cr, setCr] = useState(false); const [cu, setCu] = useState(false); const [randomRound, setRandomRound] = useState(false);
   const [nm, setNm] = useState(""); const [rmId, setRmId] = useState(null); const [search, setSearch] = useState("");
   const [showPlayers, setShowPlayers] = useState(true);
   const [showPinChange, setShowPinChange] = useState(false); const [newPinA, setNewPinA] = useState(""); const [newPinB, setNewPinB] = useState(""); const [pinErr, setPinErr] = useState("");
@@ -1225,13 +1225,13 @@ function AdminV({ st, ladder, startCyc, completeCyc, undoCyc, resetAll, addP, rm
           )}
           {!allDone && !cycleComplete && (
             st.checkedIn.length < 4 ? <p style={{ fontSize: 11, color: P.bad }}>Need 4+ ({st.checkedIn.length})</p>
-            : cc ? <div>{pend > 0 && <p style={{ fontSize: 11, color: P.bad, marginBottom: 6 }}>{pend} pending — will auto-forfeit</p>}<button onClick={() => { startCyc(); setCc(false); }} style={bpS}>Start Round {st.cycleNumber + 1}</button><button onClick={() => setCc(false)} style={bcS}>Cancel</button></div>
-            : <button onClick={() => setCc(true)} style={bpS}>Start Round {st.cycleNumber + 1}</button>
+            : cc ? <div>{pend > 0 && <p style={{ fontSize: 11, color: P.bad, marginBottom: 6 }}>{pend} pending — will auto-forfeit</p>}{randomRound && <p style={{ fontSize: 11, color: P.amber, marginBottom: 6 }}>Boxes will be randomized — rank ignored</p>}<button onClick={() => { startCyc(randomRound); setCc(false); setRandomRound(false); }} style={bpS}>Start Round {st.cycleNumber + 1}</button><button onClick={() => setCc(false)} style={bcS}>Cancel</button></div>
+            : <div><div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}><input type="checkbox" id="rndRound" checked={randomRound} onChange={e => setRandomRound(e.target.checked)} style={{ width: 16, height: 16, accentColor: P.orange, cursor: "pointer" }} /><label htmlFor="rndRound" style={{ fontSize: 12, color: P.grey, cursor: "pointer" }}>Randomize boxes <span style={{ color: P.dim, fontSize: 10 }}>(ignore seeding)</span></label></div><button onClick={() => setCc(true)} style={bpS}>Start Round {st.cycleNumber + 1}</button></div>
           )}
           {cycleComplete && (
             st.checkedIn.length < 4 ? <p style={{ fontSize: 11, color: P.bad }}>Need 4+ to start ({st.checkedIn.length} checked in)</p>
-            : cc ? <div><button onClick={() => { startCyc(); setCc(false); }} style={bpS}>Start Round {st.cycleNumber + 1}</button><button onClick={() => setCc(false)} style={bcS}>Cancel</button></div>
-            : <button onClick={() => setCc(true)} style={bpS}>Start Round {st.cycleNumber + 1}</button>
+            : cc ? <div>{randomRound && <p style={{ fontSize: 11, color: P.amber, marginBottom: 6 }}>Boxes will be randomized — rank ignored</p>}<button onClick={() => { startCyc(randomRound); setCc(false); setRandomRound(false); }} style={bpS}>Start Round {st.cycleNumber + 1}</button><button onClick={() => setCc(false)} style={bcS}>Cancel</button></div>
+            : <div><div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}><input type="checkbox" id="rndRound2" checked={randomRound} onChange={e => setRandomRound(e.target.checked)} style={{ width: 16, height: 16, accentColor: P.orange, cursor: "pointer" }} /><label htmlFor="rndRound2" style={{ fontSize: 12, color: P.grey, cursor: "pointer" }}>Randomize boxes <span style={{ color: P.dim, fontSize: 10 }}>(ignore seeding)</span></label></div><button onClick={() => setCc(true)} style={bpS}>Start Round {st.cycleNumber + 1}</button></div>
           )}
         </div>
       );
