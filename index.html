@@ -375,7 +375,7 @@ function Home({ st, ladder, gn, ini, cd }) {
         </div>
       )}
 
-      {/* Last Period Champions */}
+      {/* Last Round Champions */}
       {lastChamps.length > 0 && (
         <div style={{ ...gc, padding: "12px 16px", background: "linear-gradient(135deg, rgba(241,138,0,.12), rgba(21,152,203,.08))", borderColor: "rgba(241,138,0,.3)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
@@ -579,11 +579,11 @@ function CheckInV({ st, ladder, togCI }) {
   const [search, setSearch] = useState("");
   const [showSignUp, setShowSignUp] = useState(true);
   const [showRemaining, setShowRemaining] = useState(false);
-  // Playing This Period — players in the current active cycle
+  // Playing This Round — players in the current active round
   const currentIds = new Set((st.boxes || []).flatMap(b => b.players));
   const currentPlayers = ladder.filter(s => currentIds.has(s.id));
 
-  // Sign Up for Next Period
+  // Sign Up for Next Round
   const playing = ladder.filter(s => st.checkedIn.includes(s.id));
   const notPlaying = ladder.filter(s => !st.checkedIn.includes(s.id));
   const lastBoxes = st.boxes.length > 0 ? st.boxes : (st.pastCycles.length ? st.pastCycles[st.pastCycles.length - 1]?.boxes || [] : []);
@@ -615,11 +615,11 @@ function CheckInV({ st, ladder, togCI }) {
 
   return (<div style={{ paddingTop: 16 }}>
     <Tt>Players</Tt>
-    <p style={{ fontSize: 12, color: P.grey, marginBottom: 10 }}>{st.checkedIn.length} of {st.players.length} signed up for next period</p>
+    <p style={{ fontSize: 12, color: P.grey, marginBottom: 10 }}>{st.checkedIn.length} of {st.players.length} signed up for next round</p>
 
-    {/* Playing This Period — read-only */}
+    {/* Playing This Round — read-only */}
     {st.cycleNumber > 0 && currentPlayers.length > 0 && (<>
-      {secBtn("Playing This Period", true, () => {}, currentPlayers.length)}
+      {secBtn("Playing This Round", true, () => {}, currentPlayers.length)}
       <div style={gc}>
         {currentPlayers.map(s => (
           <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 4px", borderBottom: "1px solid rgba(21,152,203,.06)" }}>
@@ -630,8 +630,8 @@ function CheckInV({ st, ladder, togCI }) {
       </div>
     </>)}
 
-    {/* Sign Up for Next Period */}
-    {secBtn("Sign Up for Next Period", showSignUp, () => setShowSignUp(v => !v), playing.length)}
+    {/* Sign Up for Next Round */}
+    {secBtn("Sign Up for Next Round", showSignUp, () => setShowSignUp(v => !v), playing.length)}
     {showSignUp && (
       <div style={gc}>
         {playing.length === 0 && <p style={{ fontSize: 12, color: P.dim, textAlign: "center", padding: "8px 0" }}>No one signed up yet.</p>}
