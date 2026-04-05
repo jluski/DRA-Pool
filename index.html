@@ -299,7 +299,7 @@ function App() {
         {view === "boxes" && <BoxesV st={st} gn={gn} ini={ini} />}
         {view === "matches" && <MatchesV st={st} gn={gn} logR={logR} ffM={ffM} />}
         {view === "challenge" && <ChallengeV players={st.players} newOC={newOC} />}
-        {view === "checkin" && <CheckInV st={st} ladder={ladder} togCI={togCI} autoOpen={checkInFocus} onAutoOpenDone={() => setCheckInFocus(false)} />
+        {view === "checkin" && <CheckInV st={st} ladder={ladder} togCI={togCI} autoOpen={checkInFocus} onAutoOpenDone={() => setCheckInFocus(false)} />}
         {view === "rules" && <RulesV />}
         {view === "admin" && <AdminV st={st} ladder={ladder} startCyc={startCyc} completeCyc={completeCyc} undoCyc={undoCyc} resetAll={resetAll} addP={addP} rmP={rmP} ffM={ffM} gn={gn} save={save} />}
       </main>
