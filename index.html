@@ -261,7 +261,9 @@ function App() {
     }
     const nl = calcLad(st.players, { ...st, pastCycles: past, boxMatches: [], wildCards: [], openChallenges: [], boxes: [] });
     const boxes = buildBoxes(st.checkedIn, nl, randomize); const bm = genBM(boxes); const wc = genWC(boxes);
-    const ns = { ...st, pastCycles: past, boxes, boxMatches: bm, wildCards: wc, openChallenges: [], checkedIn: [], cycleStart: nw(), cycleNumber: st.cycleNumber + 1 };
+    const lastCyc = past[past.length - 1];
+    const autoCI = lastCyc ? [...new Set([...(lastCyc.boxMatches || []), ...(lastCyc.wildCards || []), ...(lastCyc.openChallenges || [])].filter(m => m.completed && !m.forfeit && !(m.score1 === 0 && m.score2 === 0)).flatMap(m => [m.player1, m.player2]))].filter(id => st.players.some(p => p.id === id)) : [];
+    const ns = { ...st, pastCycles: past, boxes, boxMatches: bm, wildCards: wc, openChallenges: [], checkedIn: autoCI, cycleStart: nw(), cycleNumber: st.cycleNumber + 1 };
     save(withLog(ns, "CYCLE_STARTED", "Round " + (st.cycleNumber + 1)));
     flash("Round " + (st.cycleNumber + 1) + " started!");
   };
