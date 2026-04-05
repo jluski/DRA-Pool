@@ -1295,6 +1295,23 @@ function AdminV({ st, ladder, startCyc, completeCyc, undoCyc, resetAll, addP, rm
       </div>
     )}
 
+    {(() => {
+      const date = new Date().toISOString().slice(0, 10);
+      const dl = (content, filename, type) => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([content], { type })); a.download = filename; a.click(); URL.revokeObjectURL(a.href); };
+      const exportJSON = () => dl(JSON.stringify(st, null, 2), `dra-pool-backup-${date}.json`, "application/json");
+      const exportCSV = () => { const elo = calcElo(st.players, st); const rows = [["Rank","Name","Points","Box Pts","Open Pts","Wins","Losses","Racks Won","Racks Lost","ELO"]]; ladder.forEach((s, i) => rows.push([i+1, s.name, s.points, s.boxPts, s.openPts, s.wins, s.losses, s.rw, s.rl, elo.ratings[s.id] || 1000])); dl(rows.map(r => r.join(",")).join("\n"), `dra-pool-standings-${date}.csv`, "text/csv"); };
+      return (
+        <div style={gc}>
+          <h4 style={{ fontSize: 15, fontWeight: 600, color: P.white, fontFamily: "Georgia,serif", marginBottom: 6 }}>Export Data</h4>
+          <p style={{ fontSize: 11, color: P.grey, marginBottom: 10 }}>Download a backup in case of issues.</p>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={exportJSON} style={{ ...bpS, flex: 1, marginTop: 0 }}>JSON Backup</button>
+            <button onClick={exportCSV} style={{ ...bpS, flex: 1, marginTop: 0, background: "linear-gradient(135deg," + P.blue + ",#0e7aad)" }}>Standings CSV</button>
+          </div>
+        </div>
+      );
+    })()}
+
     {pendingMatches.length > 0 && (
       <div style={gc}>
         <h4 style={{ fontSize: 15, fontWeight: 600, color: P.amber, fontFamily: "Georgia,serif", marginBottom: 6 }}>Pending Matches ({pendingMatches.length})</h4>
