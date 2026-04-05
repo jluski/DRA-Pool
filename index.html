@@ -247,7 +247,7 @@ function App() {
   const newOC = (p1, p2) => { if (p1 === p2) { flash("Same player!"); return; } const oc = { id: uid(), type: "open", player1: p1, player2: p2, score1: null, score2: null, completed: false, completedAt: null }; save(withLog({ ...st, openChallenges: [...st.openChallenges, oc] }, "CHALLENGE_CREATED", gn(p1) + " vs " + gn(p2))); flash("Challenge created!"); };
   const resetAll = () => { save(DEF); flash("Reset!"); setView("home"); };
 
-  const tabs = [["home", "\ud83c\udfc6"], ["boxes", "\ud83d\udcca"], ["matches", "\ud83c\udfb1"], ["challenge", "\u2694\ufe0f"], ["checkin", "\u2705"], ["admin", "\ud83d\udd12"]];
+  const tabs = [["home", "\ud83c\udfc6"], ["boxes", "\ud83d\udcca"], ["matches", "\ud83c\udfb1"], ["challenge", "\u2694\ufe0f"], ["checkin", "\u2705"], ["rules", "\ud83d\udcd6"]];
 
   return (
     <div onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} style={{ minHeight: "100vh", background: P.navy, color: P.off, fontFamily: "'DM Sans',Helvetica,sans-serif" }}>
@@ -275,24 +275,25 @@ function App() {
         <div style={{ position: "absolute", width: 400, height: 400, borderRadius: "50%", background: "radial-gradient(circle, rgba(241,138,0,.12) 0%, transparent 65%)", bottom: "80px", left: "-100px", animation: "orbFloat2 15s ease-in-out infinite" }} />
         <div style={{ position: "absolute", width: 300, height: 300, borderRadius: "50%", background: "radial-gradient(circle, rgba(0,200,180,.08) 0%, transparent 65%)", bottom: "-80px", right: "20%", animation: "orbFloat3 10s ease-in-out infinite" }} />
       </div>
-      {st.cycleStart && <div style={{ position: "sticky", top: 0, zIndex: 8, background: "rgba(255,255,255,.06)", backdropFilter: "blur(20px) saturate(150%)", WebkitBackdropFilter: "blur(20px) saturate(150%)", borderBottom: "1px solid rgba(255,255,255,.12)", boxShadow: "0 2px 20px rgba(0,0,0,.2), inset 0 1px 0 rgba(255,255,255,.15)", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 18px", animation: "slideDown .2s ease-out" }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: P.orange }}>Cycle {st.cycleNumber}</span>
-        <span style={{ fontSize: 11, color: P.off }}>{cd.d}d {cd.h}h {cd.m}m left</span>
-        <span style={{ fontSize: 11, color: P.grey }}>{activeLad.length} active</span>
-      </div>}
+      <div style={{ position: "sticky", top: 0, zIndex: 8, background: "rgba(255,255,255,.06)", backdropFilter: "blur(20px) saturate(150%)", WebkitBackdropFilter: "blur(20px) saturate(150%)", borderBottom: "1px solid rgba(255,255,255,.12)", boxShadow: "0 2px 20px rgba(0,0,0,.2), inset 0 1px 0 rgba(255,255,255,.15)", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 18px", animation: "slideDown .2s ease-out" }}>
+        {st.cycleStart ? <span style={{ fontSize: 11, fontWeight: 700, color: P.orange }}>Cycle {st.cycleNumber}</span> : <span style={{ fontSize: 11, color: P.dim }}>DRA Pool</span>}
+        {st.cycleStart ? <span style={{ fontSize: 11, color: P.off }}>{cd.d}d {cd.h}h {cd.m}m left</span> : <span />}
+        <button onClick={() => { setView("admin"); setNavIdx(-1); }} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, padding: "2px 4px", opacity: .45, lineHeight: 1 }}>🔒</button>
+      </div>
       <main style={{ maxWidth: 600, margin: "0 auto", padding: "0 14px 110px", animation: "fadeIn .3s", position: "relative", zIndex: 1 }}>
         {view === "home" && <Home st={st} ladder={activeLad} gn={gn} ini={ini} cd={cd} />}
         {view === "boxes" && <BoxesV st={st} gn={gn} ini={ini} />}
         {view === "matches" && <MatchesV st={st} gn={gn} logR={logR} ffM={ffM} />}
         {view === "challenge" && <ChallengeV players={st.players} newOC={newOC} />}
         {view === "checkin" && <CheckInV st={st} ladder={ladder} togCI={togCI} />}
+        {view === "rules" && <RulesV />}
         {view === "admin" && <AdminV st={st} ladder={ladder} startCyc={startCyc} completeCyc={completeCyc} undoCyc={undoCyc} resetAll={resetAll} addP={addP} rmP={rmP} ffM={ffM} gn={gn} save={save} />}
       </main>
       <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 10, padding: "0 14px", paddingBottom: "max(10px, env(safe-area-inset-bottom))" }}>
         <nav style={{ display: "flex", justifyContent: "space-around", alignItems: "center", padding: "6px 4px", background: "rgba(255,255,255,.08)", backdropFilter: "blur(40px) saturate(200%)", WebkitBackdropFilter: "blur(40px) saturate(200%)", borderRadius: 28, border: "1px solid rgba(255,255,255,.18)", borderTop: "1px solid rgba(255,255,255,.28)", boxShadow: "0 8px 40px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.18)", position: "relative", marginBottom: 8, overflow: "hidden" }}>
           <div style={{ position: "absolute", left: `calc(${navIdx} * (100% / 6) + 3px)`, width: "calc(100% / 6 - 6px)", top: 4, bottom: 4, borderRadius: 22, background: "rgba(255,255,255,.13)", border: "1px solid rgba(255,255,255,.22)", boxShadow: "inset 0 1px 0 rgba(255,255,255,.3)", transition: "left .28s cubic-bezier(.34,1.56,.64,1)", pointerEvents: "none" }} />
           {tabs.map(([v, ic], i) => {
-            const label = v === "checkin" ? "Players" : v;
+            const label = v === "checkin" ? "Players" : v === "rules" ? "Rules" : v;
             const isActive = view === v;
             const isTapped = tappedTab === i;
             return (
@@ -651,6 +652,120 @@ function CheckInV({ st, ladder, togCI }) {
       </div>
     )}
   </div>);
+}
+
+// ─── RULES & SCORING ─────────────────────────────────────────
+function RulesV() {
+  const [tab, setTab] = useState("rules");
+  const tabBtn = (t, label) => (
+    <button onClick={() => setTab(t)} style={{ flex: 1, padding: "10px 0", borderRadius: 12, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 700, background: tab === t ? P.orange : "rgba(21,152,203,.12)", color: tab === t ? P.navy : P.dim, transition: "background .2s" }}>{label}</button>
+  );
+  return (
+    <div style={{ paddingTop: 16 }}>
+      <Tt>Rules & Scoring</Tt>
+      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+        {tabBtn("rules", "📋 Rules")}
+        {tabBtn("scoring", "🎯 Scoring")}
+      </div>
+
+      {tab === "rules" && (
+        <div>
+          <div style={gc}>
+            <h4 style={{ fontSize: 15, fontWeight: 700, color: P.orange, marginBottom: 12, fontFamily: "Georgia,serif" }}>General Etiquette</h4>
+            {[
+              ["Be on time", "Schedule and play your matches within the cycle window. Unplayed matches at cycle end are recorded as not played and count for neither player."],
+              ["Respect your opponent", "Good sportsmanship is expected at all times. Disputes should be settled amicably — if needed, bring it to the league admin."],
+              ["Report scores promptly", "Log your match result in the app as soon as the match is complete so standings stay current."],
+              ["Play all your matches", "Every match in your box should be played. Wild card matches are also expected to be completed within the cycle."],
+            ].map(([title, body]) => (
+              <div key={title} style={{ marginBottom: 14, paddingBottom: 14, borderBottom: "1px solid rgba(21,152,203,.08)" }}>
+                <p style={{ fontSize: 13, fontWeight: 700, color: P.off, marginBottom: 4 }}>{title}</p>
+                <p style={{ fontSize: 12, color: P.grey, lineHeight: 1.6 }}>{body}</p>
+              </div>
+            ))}
+          </div>
+          <div style={gc}>
+            <h4 style={{ fontSize: 15, fontWeight: 700, color: P.orange, marginBottom: 12, fontFamily: "Georgia,serif" }}>Match Format</h4>
+            {[
+              ["Box Play", "Each cycle, players are placed into boxes of 4 (or a Swing Box of 3). You play every other player in your box once."],
+              ["Wild Cards", "Each cycle includes wild card matches pairing players across different boxes for extra competition."],
+              ["Open Challenges", "Players can issue open challenges to anyone in the league at any time for fun — these earn 1 point per win."],
+              ["Cycle Duration", "Each cycle runs for a set number of weeks (configurable by the admin). The countdown is shown at the top of the app."],
+            ].map(([title, body]) => (
+              <div key={title} style={{ marginBottom: 14, paddingBottom: 14, borderBottom: "1px solid rgba(21,152,203,.08)" }}>
+                <p style={{ fontSize: 13, fontWeight: 700, color: P.off, marginBottom: 4 }}>{title}</p>
+                <p style={{ fontSize: 12, color: P.grey, lineHeight: 1.6 }}>{body}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {tab === "scoring" && (
+        <div>
+          <div style={gc}>
+            <h4 style={{ fontSize: 15, fontWeight: 700, color: P.orange, marginBottom: 12, fontFamily: "Georgia,serif" }}>Match Points</h4>
+            <p style={{ fontSize: 11, color: P.dim, marginBottom: 12 }}>Applies to box matches and wild card matches.</p>
+            <div style={{ borderRadius: 12, overflow: "hidden", border: "1px solid rgba(255,255,255,.1)" }}>
+              {[
+                ["Shutout Win", "Win with opponent scoring 0", "5 pts", P.orange],
+                ["Win", "Win with opponent scoring ≥ 1", "4 pts", P.amber],
+                ["Loss with score", "Lose but score at least 1", "2 pts", P.blue],
+                ["Shutout Loss", "Lose without scoring", "0 pts", P.bad],
+              ].map(([result, desc, pts, color], i) => (
+                <div key={result} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: i % 2 === 0 ? "rgba(0,48,82,.4)" : "transparent", borderBottom: i < 3 ? "1px solid rgba(255,255,255,.05)" : "none" }}>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ fontSize: 12, fontWeight: 700, color: P.off, marginBottom: 2 }}>{result}</p>
+                    <p style={{ fontSize: 10, color: P.dim }}>{desc}</p>
+                  </div>
+                  <span style={{ fontSize: 18, fontWeight: 700, color, minWidth: 44, textAlign: "right" }}>{pts}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={gc}>
+            <h4 style={{ fontSize: 15, fontWeight: 700, color: P.orange, marginBottom: 12, fontFamily: "Georgia,serif" }}>End-of-Cycle Bonuses</h4>
+            <p style={{ fontSize: 11, color: P.dim, marginBottom: 12 }}>Awarded when all matches in a box are complete.</p>
+            <div style={{ borderRadius: 12, overflow: "hidden", border: "1px solid rgba(255,255,255,.1)" }}>
+              {[
+                ["Box Winner", "Finish 1st in your box", "+3 pts", P.orange],
+                ["Box Runner-Up", "Finish 2nd in your box", "+1 pt", P.grey],
+              ].map(([result, desc, pts, color], i) => (
+                <div key={result} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: i % 2 === 0 ? "rgba(0,48,82,.4)" : "transparent", borderBottom: i < 1 ? "1px solid rgba(255,255,255,.05)" : "none" }}>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ fontSize: 12, fontWeight: 700, color: P.off, marginBottom: 2 }}>{result}</p>
+                    <p style={{ fontSize: 10, color: P.dim }}>{desc}</p>
+                  </div>
+                  <span style={{ fontSize: 18, fontWeight: 700, color, minWidth: 44, textAlign: "right" }}>{pts}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={gc}>
+            <h4 style={{ fontSize: 15, fontWeight: 700, color: P.orange, marginBottom: 12, fontFamily: "Georgia,serif" }}>Open Challenges</h4>
+            <div style={{ borderRadius: 12, overflow: "hidden", border: "1px solid rgba(255,255,255,.1)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "rgba(0,48,82,.4)" }}>
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: 12, fontWeight: 700, color: P.off, marginBottom: 2 }}>Win</p>
+                  <p style={{ fontSize: 10, color: P.dim }}>Defeat any opponent in an open challenge</p>
+                </div>
+                <span style={{ fontSize: 18, fontWeight: 700, color: P.blue, minWidth: 44, textAlign: "right" }}>1 pt</span>
+              </div>
+            </div>
+          </div>
+          <div style={{ ...gc, background: "rgba(21,152,203,.06)", border: "1px solid rgba(21,152,203,.2)" }}>
+            <h4 style={{ fontSize: 13, fontWeight: 700, color: P.blue, marginBottom: 10 }}>Example: Best Possible Cycle</h4>
+            <p style={{ fontSize: 11, color: P.grey, lineHeight: 1.7 }}>
+              Win all 3 box matches by shutout → <span style={{ color: P.orange, fontWeight: 700 }}>15 pts</span><br />
+              + Box winner bonus → <span style={{ color: P.orange, fontWeight: 700 }}>+3 pts</span><br />
+              + Win wild card → <span style={{ color: P.orange, fontWeight: 700 }}>+4 pts</span><br />
+              <span style={{ color: P.off, fontWeight: 700 }}>Total: 22 pts</span>
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ─── ADMIN ───────────────────────────────────────────────────
