@@ -120,8 +120,8 @@ function getH2H(p1, p2, st) {
 // ELO rating system — score-margin weighted, provisional K, per-match deltas
 function calcElo(players, st) {
   const K_BOX = 32, K_WC = 24, K_OPEN = 16, K_PROV = 48, PROV = 8, BASE = 1000;
-  const ratings = {}, peaks = {}, played = {}, deltas = {};
-  players.forEach(p => { ratings[p.id] = BASE; peaks[p.id] = BASE; played[p.id] = 0; });
+  const ratings = {}, played = {}, deltas = {};
+  players.forEach(p => { ratings[p.id] = BASE; played[p.id] = 0; });
   const all = [];
   (st.pastCycles || []).forEach(c => {
     (c.boxMatches || []).forEach(m => all.push({ ...m, _k: K_BOX }));
@@ -143,12 +143,10 @@ function calcElo(players, st) {
       const da = Math.round(ka * (res1 - ea));
       const db = Math.round(kb * (res2 - (1 - ea)));
       ratings[m.player1] += da; ratings[m.player2] += db;
-      peaks[m.player1] = Math.max(peaks[m.player1], ratings[m.player1]);
-      peaks[m.player2] = Math.max(peaks[m.player2], ratings[m.player2]);
       played[m.player1]++; played[m.player2]++;
       deltas[m.id] = { [m.player1]: da, [m.player2]: db };
     });
-  return { ratings, peaks, deltas };
+  return { ratings, deltas };
 }
 
 // Get monthly champions from past cycles (Box 1 winner)
@@ -499,7 +497,6 @@ function Home({ st, ladder, gn, ini, cd, onJoin }) {
                 </div>
                 {exp === s.id && (() => {
                   const elo = eloData.ratings[s.id] || 1000;
-                  const peak = eloData.peaks[s.id] || 1000;
                   const prev = prevElo.ratings[s.id] || 1000;
                   const eloDelta = elo - prev;
                   const rank = eloRank[s.id] || "—";
@@ -514,7 +511,7 @@ function Home({ st, ladder, gn, ini, cd, onJoin }) {
                         {s.inactive && <span style={{ fontSize: 11, color: P.bad }}>Inactive</span>}
                       </div>
                       <div style={{ marginBottom: 8 }}>
-                        <span style={{ fontSize: 11, color: P.grey }}>ELO: <span style={{ color: P.blue, fontWeight: 700 }}>{elo}</span>{eloDelta !== 0 && <span style={{ color: eloDelta > 0 ? P.ok : P.bad }}> ({eloDelta > 0 ? "+" : ""}{eloDelta})</span>} <span style={{ color: P.dim }}>#{rank}</span>{peak > elo && <span style={{ color: P.amber }}> ↑{peak}pk</span>}</span>
+                        <span style={{ fontSize: 11, color: P.grey }}>ELO: <span style={{ color: P.blue, fontWeight: 700 }}>{elo}</span>{eloDelta !== 0 && <span style={{ color: eloDelta > 0 ? P.ok : P.bad }}> ({eloDelta > 0 ? "+" : ""}{eloDelta})</span>} <span style={{ color: P.dim }}>#{rank}</span></span>
                       </div>
                       {!hist.length ? <p style={{ fontSize: 10, color: P.dim, fontStyle: "italic" }}>No match history.</p> : (
                         <div>
