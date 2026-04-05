@@ -146,7 +146,7 @@ function calcElo(players, st) {
       played[m.player1]++; played[m.player2]++;
       deltas[m.id] = { [m.player1]: da, [m.player2]: db };
     });
-  return { ratings, deltas };
+  return { ratings, deltas, played };
 }
 
 // Get monthly champions from past cycles (Box 1 winner)
@@ -355,7 +355,8 @@ function Home({ st, ladder, gn, ini, cd, onJoin }) {
   const eloData = calcElo(st.players, st);
   const prevSt = { ...st, boxMatches: [], wildCards: [], openChallenges: [] };
   const prevElo = calcElo(st.players, prevSt);
-  const eloRanked = [...st.players].sort((a, b) => (eloData.ratings[b.id] || 1000) - (eloData.ratings[a.id] || 1000));
+  const ELO_MIN = 3;
+  const eloRanked = [...st.players].filter(p => (eloData.played[p.id] || 0) >= ELO_MIN).sort((a, b) => (eloData.ratings[b.id] || 1000) - (eloData.ratings[a.id] || 1000));
   const eloRank = {}; eloRanked.forEach((p, i) => { eloRank[p.id] = i + 1; });
   const last5 = (st.openChallenges || []).filter(m => m.completed).slice(-5).reverse();
   const getS = (bm, p1, p2) => { const m = bm.find(m => (m.player1 === p1 && m.player2 === p2) || (m.player1 === p2 && m.player2 === p1)); if (!m) return null; if (!m.completed) return { pending: true }; return { s1: m.player1 === p1 ? m.score1 : m.score2, s2: m.player1 === p1 ? m.score2 : m.score1 }; };
@@ -510,9 +511,15 @@ function Home({ st, ladder, gn, ini, cd, onJoin }) {
                         <span style={{ fontSize: 11, color: P.grey }}>Last: <span style={{ color: P.off }}>{s.last ? new Date(s.last).toLocaleDateString() : "N/A"}</span></span>
                         {s.inactive && <span style={{ fontSize: 11, color: P.bad }}>Inactive</span>}
                       </div>
-                      <div style={{ marginBottom: 8 }}>
-                        <span style={{ fontSize: 11, color: P.grey }}>ELO: <span style={{ color: P.blue, fontWeight: 700 }}>{elo}</span>{eloDelta !== 0 && <span style={{ color: eloDelta > 0 ? P.ok : P.bad }}> ({eloDelta > 0 ? "+" : ""}{eloDelta})</span>} <span style={{ color: P.dim }}>#{rank}</span></span>
-                      </div>
+                      {(eloData.played[s.id] || 0) >= ELO_MIN ? (
+                        <div style={{ marginBottom: 8 }}>
+                          <span style={{ fontSize: 11, color: P.grey }}>ELO: <span style={{ color: P.blue, fontWeight: 700 }}>{elo}</span>{eloDelta !== 0 && <span style={{ color: eloDelta > 0 ? P.ok : P.bad }}> ({eloDelta > 0 ? "+" : ""}{eloDelta})</span>} <span style={{ color: P.dim }}>#{rank}</span></span>
+                        </div>
+                      ) : (
+                        <div style={{ marginBottom: 8 }}>
+                          <span style={{ fontSize: 11, color: P.dim }}>ELO unlocks after {ELO_MIN - (eloData.played[s.id] || 0)} more match{ELO_MIN - (eloData.played[s.id] || 0) !== 1 ? "es" : ""}</span>
+                        </div>
+                      )}
                       {!hist.length ? <p style={{ fontSize: 10, color: P.dim, fontStyle: "italic" }}>No match history.</p> : (
                         <div>
                           <p style={{ fontSize: 9, fontWeight: 700, color: P.blue, letterSpacing: 2, textTransform: "uppercase", marginBottom: 5 }}>Match History</p>
