@@ -27,7 +27,7 @@ const { useState, useEffect, useCallback } = React;
 
 
 const fmtDate = (iso) => { if (!iso) return ""; const d = new Date(iso); return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); };
-const P = { navy:"#001B36", mid:"#003052", blue:"#1598CB", orange:"#F18A00", amber:"#FFAD33", white:"#FFF", off:"#C8DAE8", grey:"#7B95AA", dim:"#4A6275", glass:"rgba(255,255,255,.05)", gb:"rgba(255,255,255,.12)", ok:"#34D399", bad:"#F87171", glow:"rgba(21,152,203,.25)" };
+const P = { navy:"#001B36", mid:"#003052", blue:"#1598CB", orange:"#F18A00", amber:"#FFAD33", white:"#FFF", off:"#C8DAE8", grey:"#7B95AA", dim:"#4A6275", glass:"rgba(255,255,255,.05)", gb:"rgba(255,255,255,.12)", ok:"#34D399", bad:"#F87171" };
 const uid = () => Math.random().toString(36).slice(2, 9);
 const nw = () => new Date().toISOString();
 const dd = (a, b) => Math.abs(new Date(a) - new Date(b)) / 864e5;
@@ -141,42 +141,9 @@ function getChampions(st, gn) {
   return champs;
 }
 
-// Get current box winners for ALL boxes
-function getBoxWinners(st, gn) {
-  if (!st.boxes || !st.boxMatches) return [];
-  const winners = [];
-  st.boxes.forEach((box, bi) => {
-    const bm = st.boxMatches.filter(m => m.box === bi);
-    if (bm.length > 0 && bm.every(m => m.completed)) {
-      const bs = boxSt(box.players, bm);
-      if (bs[0]) winners.push({ box: box.name, id: bs[0].id, name: gn(bs[0].id), isBox1: bi === 0 && !box.isSwing });
-    }
-  });
-  return winners;
-}
-
-// Rank changes: compare current ladder position to previous cycle's ladder
-function getRankChanges(ladder, st, players) {
-  if (!st.pastCycles || !st.pastCycles.length) return {};
-  const prevSt = { ...st, boxMatches: [], wildCards: [], openChallenges: [], boxes: [], pastCycles: st.pastCycles.slice(0, -1) };
-  // Add the second-to-last cycle's data
-  const lastCyc = st.pastCycles[st.pastCycles.length - 1];
-  if (lastCyc) { prevSt.boxMatches = lastCyc.boxMatches || []; prevSt.wildCards = lastCyc.wildCards || []; prevSt.openChallenges = lastCyc.openChallenges || []; prevSt.boxes = lastCyc.boxes || []; }
-  const prevLad = calcLad(players, prevSt);
-  const prevRank = {}; prevLad.forEach((s, i) => { prevRank[s.id] = i; });
-  const changes = {};
-  ladder.forEach((s, i) => {
-    const prev = prevRank[s.id];
-    if (prev === undefined) changes[s.id] = "new";
-    else if (prev > i) changes[s.id] = prev - i;
-    else if (prev < i) changes[s.id] = -(i - prev);
-    else changes[s.id] = 0;
-  });
-  return changes;
-}
 
 const PLAYERS = ["Gianna Acitelli","Elvira Aguillon","Koula Angelinas","Jean Marie Apruzzese","Gerard Apruzzese","Frank Banta","Bart Bess","Glen Besser","Sreyansh Biswal","Amanda Bloshuk","Eduardo Bonilla","Jason Borreo","Brad Boyle","Adam Breen","Duncan Brennan","Kenneth Carpenter","Hans Castaneda","Miguel Castro","Karen Chen","Steven Ciardiello","Dan Conlisk","Christopher Cook","Bridget Cooney","Rafael Cordero","Mike Cottam","Nicholas Cresta","Shawn Dacey","Zahra Derrick","James Driscoll","Matthew Farina","Susan Fattorusso","Lucy Ferrantelli","Sandy French","Daniel Giordano","Daniel Goldman","Brett Gottlieb","Korey Grabowski","Daniel Graham","David Gray","Andrew Grider","Max Gustafson","John Haaf","Melissa Haime","Christopher Halloran","William Hankers","Jake Hannah","Lauren Hayes","Anthony Helmandollar","Ian Holland","Hussein Hussein","Robert Hyman","Peter Ibelli","Patrick Judge","Brian Kittner","Sam Klaber","Jared Konigsberg","John Kopans","Werner Kratovil","Jonathan Lea","Jeffrey Lehrman","Christopher Lepore","Wei Lin","Jack Linehan","David Luski","Jason Luski","Shayne Lyons","Sloan Martin","Gabriella Mascellino","Quinn McQuade","Adam Melnick","Mario Minera","Anna Ming","Cristin Mitchell","Melanie Mohr","Indira Negron","Payton Odom","Peter Papadakos","Anjali Pharsi","Regina Poniros","Delaney Reynolds","Stephanie Rivera","Janine Roberts","Maria Rodriguez","Charles Ruotolo","Michelle Santos","Merritt Scott","John Serzan","Tracy Shi","Matt Shore","Tracy Sonnabend","Kim Stirba","Carol Su","Stephen Suriano","Aaron Talan","Amanda Taylor","Anthony Venditti","Ivan Vidal","Hope Wasserman","Andrew Wietstock","Liying Yang","Thomas Yang","Ashley Yip","Michael Yurick"].map(n => ({ id: uid(), name: n, joinedAt: nw() }));
-const DEF = { players: PLAYERS, boxes: [], boxMatches: [], wildCards: [], openChallenges: [], tiebreakerMatches: [], checkedIn: [], pastCycles: [], cycleNumber: 0, cycleStart: null, cycleDurationWeeks: 4, auditLog: [], adminPin: null };
+const DEF = { players: PLAYERS, boxes: [], boxMatches: [], wildCards: [], openChallenges: [], checkedIn: [], pastCycles: [], cycleNumber: 0, cycleStart: null, cycleDurationWeeks: 4, auditLog: [], adminPin: null };
 const withLog = (s, action, details) => { const al = [...(s.auditLog || []), { id: uid(), ts: nw(), action, details }]; return { ...s, auditLog: al.length > 200 ? al.slice(-200) : al }; };
 
 function useCD(cycleStart, weeks) { const [r, setR] = useState({ d: 0, h: 0, m: 0 }); useEffect(() => { const tick = () => { if (!cycleStart) { setR({ d: 0, h: 0, m: 0 }); return; } const end = new Date(new Date(cycleStart).getTime() + (weeks || 4) * 7 * 864e5); const diff = Math.max(0, end.getTime() - Date.now()); setR({ d: Math.floor(diff / 864e5), h: Math.floor((diff % 864e5) / 36e5), m: Math.floor((diff % 36e5) / 6e4) }); }; tick(); const id = setInterval(tick, 6e4); return () => clearInterval(id); }, [cycleStart, weeks]); return r; }
@@ -235,21 +202,17 @@ function App() {
   const activeLad = ladder.filter(s => activeIds.has(s.id));
   const gn = (id) => { if (!st) return "?"; const p = st.players.find(x => x.id === id); return p ? p.name : "?"; };
   const ini = (id) => gn(id).split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 3);
-  const boxWinners = st ? getBoxWinners(st, gn) : [];
-
   if (!st) return <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: P.navy }}><div style={{ width: 36, height: 36, border: "2px solid " + P.mid, borderTop: "2px solid " + P.orange, borderRadius: "50%", animation: "spin .7s linear infinite" }} /><style>{"@keyframes spin{to{transform:rotate(360deg)}}"}</style></div>;
 
   const addP = (n) => { if (!n.trim() || st.players.find(p => p.name.toLowerCase() === n.trim().toLowerCase())) { flash("Invalid/duplicate"); return; } const np = { id: uid(), name: n.trim(), joinedAt: nw() }; save(withLog({ ...st, players: [...st.players, np] }, "PLAYER_ADDED", n.trim())); flash(n.trim() + " joined!"); };
   const rmP = (id) => { const nm = (st.players.find(p => p.id === id) || {}).name || id; save(withLog({ ...st, players: st.players.filter(p => p.id !== id), checkedIn: st.checkedIn.filter(c => c !== id) }, "PLAYER_REMOVED", nm)); flash("Removed"); };
   const togCI = (id) => { save({ ...st, checkedIn: st.checkedIn.includes(id) ? st.checkedIn.filter(c => c !== id) : [...st.checkedIn, id] }); };
-  const selAll = () => { save({ ...st, checkedIn: st.players.map(p => p.id) }); flash("All checked in!"); };
-  const deselAll = () => { save({ ...st, checkedIn: [] }); flash("All unchecked"); };
   const selLast = () => { if (!st.pastCycles.length) { flash("No previous round"); return; } const lastC = st.pastCycles[st.pastCycles.length - 1]; const allM = [...(lastC.boxMatches || []), ...(lastC.wildCards || []), ...(lastC.openChallenges || [])].filter(m => m.completed && !m.forfeit); const ids = [...new Set(allM.flatMap(m => [m.player1, m.player2]))].filter(id => st.players.some(p => p.id === id)); if (!ids.length) { flash("No previous round"); return; } save({ ...st, checkedIn: ids }); flash(ids.length + " from last round!"); };
   const completeCyc = () => {
     const bon = [];
     if (st.boxes) st.boxes.forEach((box, bi) => { const bm = (st.boxMatches || []).filter(m => m.box === bi); if (bm.length > 0 && bm.every(m => m.completed)) { const bs = boxSt(box.players, bm); if (bs[0]) bon.push({ id: bs[0].id, pts: 3 }); if (bs[1]) bon.push({ id: bs[1].id, pts: 1 }); } });
-    const past = st.cycleNumber > 0 ? [...st.pastCycles, { cycle: st.cycleNumber, boxMatches: st.boxMatches || [], wildCards: st.wildCards || [], openChallenges: st.openChallenges || [], tiebreakerMatches: st.tiebreakerMatches || [], boxes: st.boxes || [], bonuses: [...bon], startedAt: st.cycleStart }] : st.pastCycles;
-    save(withLog({ ...st, pastCycles: past, boxes: [], boxMatches: [], wildCards: [], openChallenges: [], tiebreakerMatches: [] }, "CYCLE_COMPLETED", "Round " + st.cycleNumber));
+    const past = st.cycleNumber > 0 ? [...st.pastCycles, { cycle: st.cycleNumber, boxMatches: st.boxMatches || [], wildCards: st.wildCards || [], openChallenges: st.openChallenges || [], boxes: st.boxes || [], bonuses: [...bon], startedAt: st.cycleStart }] : st.pastCycles;
+    save(withLog({ ...st, pastCycles: past, boxes: [], boxMatches: [], wildCards: [], openChallenges: [] }, "CYCLE_COMPLETED", "Round " + st.cycleNumber));
     flash("Round " + st.cycleNumber + " complete!");
   };
   const startCyc = () => {
@@ -260,11 +223,11 @@ function App() {
       const afBM = (st.boxMatches || []).map(m => { if (!m.completed) { return { ...m, score1: 0, score2: 0, completed: true, completedAt: nw(), forfeit: true, autoForfeit: true }; } return m; });
       const afWC = (st.wildCards || []).map(m => { if (!m.completed) { return { ...m, score1: 0, score2: 0, completed: true, completedAt: nw(), forfeit: true, autoForfeit: true }; } return m; });
       if (st.boxes) st.boxes.forEach((box, bi) => { const bm = afBM.filter(m => m.box === bi); if (bm.length > 0 && bm.every(m => m.completed)) { const bs = boxSt(box.players, bm); if (bs[0]) bon.push({ id: bs[0].id, pts: 3 }); if (bs[1]) bon.push({ id: bs[1].id, pts: 1 }); } });
-      past = [...st.pastCycles, { cycle: st.cycleNumber, boxMatches: afBM, wildCards: afWC, openChallenges: st.openChallenges, tiebreakerMatches: st.tiebreakerMatches || [], boxes: st.boxes, bonuses: [...bon], startedAt: st.cycleStart }];
+      past = [...st.pastCycles, { cycle: st.cycleNumber, boxMatches: afBM, wildCards: afWC, openChallenges: st.openChallenges, boxes: st.boxes, bonuses: [...bon], startedAt: st.cycleStart }];
     }
     const nl = calcLad(st.players, { ...st, pastCycles: past, boxMatches: [], wildCards: [], openChallenges: [], boxes: [] });
     const boxes = buildBoxes(st.checkedIn, nl); const bm = genBM(boxes); const wc = genWC(boxes);
-    const ns = { ...st, pastCycles: past, boxes, boxMatches: bm, wildCards: wc, openChallenges: [], tiebreakerMatches: [], cycleStart: nw(), cycleNumber: st.cycleNumber + 1 };
+    const ns = { ...st, pastCycles: past, boxes, boxMatches: bm, wildCards: wc, openChallenges: [], cycleStart: nw(), cycleNumber: st.cycleNumber + 1 };
     save(withLog(ns, "CYCLE_STARTED", "Round " + (st.cycleNumber + 1)));
     flash("Round " + (st.cycleNumber + 1) + " started!");
   };
@@ -287,7 +250,6 @@ function App() {
         @keyframes orbFloat1{0%,100%{transform:translate(0,0)}50%{transform:translate(-30px,25px)}}
         @keyframes orbFloat2{0%,100%{transform:translate(0,0)}50%{transform:translate(25px,-20px)}}
         @keyframes orbFloat3{0%,100%{transform:translate(0,0)}50%{transform:translate(-20px,30px)}}
-        @keyframes tieFlash{0%,100%{border-color:rgba(241,138,0,.25);background:rgba(241,138,0,.06)}50%{border-color:rgba(241,138,0,.8);background:rgba(241,138,0,.18)}}
         @keyframes navBounce{0%{transform:scale(1) translateY(0)}30%{transform:scale(1.35) translateY(-5px)}60%{transform:scale(.95) translateY(1px)}100%{transform:scale(1) translateY(0)}}
         @keyframes glowBurst{0%{opacity:.7;transform:translate(-50%,-50%) scale(.4)}100%{opacity:0;transform:translate(-50%,-50%) scale(2.2)}}
         @keyframes shimmer{0%{background-position:200% center}100%{background-position:-200% center}}
@@ -322,7 +284,7 @@ function App() {
       )}
       <main style={{ maxWidth: 600, margin: "0 auto", padding: "0 14px 110px", animation: "fadeIn .3s", position: "relative", zIndex: 1 }}>
         {view === "home" && <Home st={st} ladder={activeLad} gn={gn} ini={ini} cd={cd} onJoin={() => { setView("checkin"); setNavIdx(4); setCheckInFocus(true); }} />}
-        {view === "boxes" && <BoxesV st={st} gn={gn} ini={ini} save={save} flash={flash} />}
+        {view === "boxes" && <BoxesV st={st} gn={gn} ini={ini} />}
         {view === "matches" && <MatchesV st={st} gn={gn} logR={logR} ffM={ffM} />}
         {view === "challenge" && <ChallengeV players={st.players} newOC={newOC} />}
         {view === "checkin" && <CheckInV st={st} ladder={ladder} togCI={togCI} autoOpen={checkInFocus} onAutoOpenDone={() => setCheckInFocus(false)} />}
@@ -547,15 +509,14 @@ function Home({ st, ladder, gn, ini, cd, onJoin }) {
 }
 
 // ─── BOXES ───────────────────────────────────────────────────
-function BoxesV({ st, gn, ini, save, flash }) {
+function BoxesV({ st, gn, ini }) {
   const [col, setCol] = useState({});
-  const [tbScore, setTbScore] = useState({});
   if (!st.boxes || !st.boxes.length) return <div style={{ textAlign: "center", padding: 50 }}><p style={{ fontSize: 44 }}>{"\ud83d\udcca"}</p><p style={{ color: P.grey }}>No active round.</p></div>;
   const getS = (bm, p1, p2) => { const m = bm.find(m => (m.player1 === p1 && m.player2 === p2) || (m.player1 === p2 && m.player2 === p1)); if (!m) return null; if (!m.completed) return { pending: true }; return { s1: m.player1 === p1 ? m.score1 : m.score2, s2: m.player1 === p1 ? m.score2 : m.score1 }; };
   const togCol = (k) => setCol(c => ({ ...c, [k]: !c[k] }));
   return (
     <div style={{ paddingTop: 16 }}><Tt>Boxes — Round {st.cycleNumber}</Tt>
-      {st.boxes.map((box, bi) => { const bm = st.boxMatches.filter(m => m.box === bi); const bs = boxSt(box.players, bm); const pids = bs.map(s => s.id); const done = bm.length > 0 && bm.every(m => m.completed); const isCol = col["box_" + bi]; const tiedTop = done && bs.length >= 2 ? bs.filter(p => p.pts === bs[0].pts) : []; const hasTie = tiedTop.length >= 2;
+      {st.boxes.map((box, bi) => { const bm = st.boxMatches.filter(m => m.box === bi); const bs = boxSt(box.players, bm); const pids = bs.map(s => s.id); const done = bm.length > 0 && bm.every(m => m.completed); const isCol = col["box_" + bi];
         return (
           <div key={bi} style={{ marginBottom: 16 }}>
             <div onClick={() => togCol("box_" + bi)} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, cursor: "pointer", userSelect: "none" }}>
@@ -568,52 +529,6 @@ function BoxesV({ st, gn, ini, save, flash }) {
               <tbody>{pids.map((pid, ri) => (<tr key={pid}><td style={{ ...gtd, textAlign: "left", fontWeight: 600, fontSize: 12 }}>{gn(pid)}</td><td style={{ ...gtd, fontWeight: 700, color: P.orange }}>{bs[ri] ? bs[ri].pts : 0}</td>
                 {pids.map(oid => { if (pid === oid) return <td key={oid} style={{ ...gtd, background: "rgba(0,48,82,.4)" }} />; const sc = getS(bm, pid, oid); if (!sc) return <td key={oid} style={{ ...gtd, color: P.dim }}>{"—"}</td>; if (sc.pending) return <td key={oid} style={{ ...gtd, background: "rgba(241,138,0,.12)" }}><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: P.orange, animation: "pulse 1.8s infinite" }} /></td>; if (sc.s1 === 0 && sc.s2 === 0) return <td key={oid} style={{ ...gtd, color: P.dim, fontSize: 10, fontStyle: "italic" }}>FF</td>; const w = sc.s1 > sc.s2; return <td key={oid} style={{ ...gtd, fontWeight: 700, color: w ? P.ok : P.bad, background: w ? "rgba(52,211,153,.08)" : "rgba(248,113,113,.06)" }}>{sc.s1}-{sc.s2}</td>; })}
               </tr>))}</tbody></table></div></div>}
-            {!isCol && done && hasTie && (() => {
-              const p0 = tiedTop[0], p1 = tiedTop[1];
-              const tbKey = "tb_" + bi + "_" + p0.id + "_" + p1.id;
-              const tbMs = st.tiebreakerMatches || [];
-              const existing = tbMs.find(m => m.box === bi && ((m.player1 === p0.id && m.player2 === p1.id) || (m.player1 === p1.id && m.player2 === p0.id)));
-              const createTb = () => { if (existing) return; const nm = { id: uid(), box: bi, player1: p0.id, player2: p1.id, completed: false, score1: 0, score2: 0, type: "tiebreaker" }; save({ ...st, tiebreakerMatches: [...tbMs, nm] }); flash("Tiebreaker match scheduled!"); };
-              const submitTb = () => { const s1 = parseInt(tbScore[tbKey + "_s1"]) || 0, s2 = parseInt(tbScore[tbKey + "_s2"]) || 0; if ((s1 !== 2 && s2 !== 2) || s1 === s2) { flash("Invalid score — must be 2-0 or 2-1"); return; } save({ ...st, tiebreakerMatches: tbMs.map(m => m.id === existing.id ? { ...m, score1: m.player1 === p0.id ? s1 : s2, score2: m.player1 === p0.id ? s2 : s1, completed: true } : m) }); flash("Tiebreaker recorded!"); };
-              if (!existing) return (
-                <div style={{ marginTop: 6, border: "1px solid", borderRadius: 12, padding: "10px 14px", animation: "tieFlash 1.4s ease-in-out infinite", textAlign: "center" }}>
-                  <p style={{ fontSize: 8, fontWeight: 700, letterSpacing: 3, color: P.orange, marginBottom: 8 }}>{"\u26a1"} TIEBREAKER</p>
-                  <p style={{ fontSize: 12, color: P.grey, marginBottom: 10 }}>{gn(p0.id)} vs {gn(p1.id)} — box tied on points</p>
-                  <button onClick={createTb} style={{ ...bpS, fontSize: 11, padding: "6px 18px" }}>Schedule Tiebreaker Match</button>
-                </div>
-              );
-              if (!existing.completed) {
-                const tbP1 = gn(existing.player1), tbP2 = gn(existing.player2);
-                const k1 = tbKey + "_s1", k2 = tbKey + "_s2";
-                return (
-                  <div style={{ marginTop: 6, border: "1px solid", borderRadius: 12, padding: "10px 14px", animation: "tieFlash 1.4s ease-in-out infinite", textAlign: "center" }}>
-                    <p style={{ fontSize: 8, fontWeight: 700, letterSpacing: 3, color: P.orange, marginBottom: 8 }}>{"\u26a1"} TIEBREAKER — IN PROGRESS</p>
-                    <p style={{ fontSize: 12, color: P.grey, marginBottom: 10 }}>{tbP1} vs {tbP2} · No points awarded</p>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 10 }}>
-                      <span style={{ fontSize: 13, fontWeight: 600, flex: 1, textAlign: "right" }}>{tbP1}</span>
-                      <input type="number" min={0} max={2} value={tbScore[k1] ?? ""} onChange={e => setTbScore(s => ({ ...s, [k1]: e.target.value }))} style={{ ...ssS, width: 44, textAlign: "center" }} placeholder="0" />
-                      <span style={{ color: P.dim }}>–</span>
-                      <input type="number" min={0} max={2} value={tbScore[k2] ?? ""} onChange={e => setTbScore(s => ({ ...s, [k2]: e.target.value }))} style={{ ...ssS, width: 44, textAlign: "center" }} placeholder="0" />
-                      <span style={{ fontSize: 13, fontWeight: 600, flex: 1, textAlign: "left" }}>{tbP2}</span>
-                    </div>
-                    <button onClick={submitTb} style={{ ...bpS, fontSize: 11, padding: "6px 18px" }}>Submit Result</button>
-                  </div>
-                );
-              }
-              const tbP1id = existing.player1, tbP2id = existing.player2;
-              const winnerId = existing.score1 > existing.score2 ? tbP1id : tbP2id;
-              return (
-                <div style={{ marginTop: 6, border: "1px solid rgba(52,211,153,.4)", borderRadius: 12, padding: "10px 14px", background: "rgba(52,211,153,.06)", textAlign: "center" }}>
-                  <p style={{ fontSize: 8, fontWeight: 700, letterSpacing: 3, color: P.ok, marginBottom: 8 }}>{"\u26a1"} TIEBREAKER — RESOLVED</p>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, marginBottom: 8 }}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: winnerId === tbP1id ? P.ok : P.dim, flex: 1, textAlign: "right" }}>{gn(tbP1id)}</span>
-                    <span style={{ fontSize: 20, fontWeight: 700, color: P.off }}>{existing.score1}–{existing.score2}</span>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: winnerId === tbP2id ? P.ok : P.dim, flex: 1, textAlign: "left" }}>{gn(tbP2id)}</span>
-                  </div>
-                  <p style={{ fontSize: 12, fontWeight: 700, color: P.ok }}>{gn(winnerId)} wins the box {"\ud83c\udfc6"}</p>
-                </div>
-              );
-            })()}
             {!isCol && done && <div style={{ display: "flex", gap: 12, marginTop: 6 }}><span style={{ fontSize: 10, color: P.orange }}>{"\ud83e\udd47"} {gn(bs[0] ? bs[0].id : "")} (+3)</span>{bs[1] && <span style={{ fontSize: 10, color: P.grey }}>{"\ud83e\udd48"} {gn(bs[1].id)} (+1)</span>}</div>}
           </div>); })}
       {st.wildCards && st.wildCards.length > 0 && (
