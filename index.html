@@ -660,6 +660,30 @@ function RulesV() {
   const tabBtn = (t, label) => (
     <button onClick={() => setTab(t)} style={{ flex: 1, padding: "10px 0", borderRadius: 12, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 700, background: tab === t ? P.orange : "rgba(21,152,203,.12)", color: tab === t ? P.navy : P.dim, transition: "background .2s" }}>{label}</button>
   );
+  const Section = ({ title, color, children }) => (
+    <div style={gc}>
+      <h4 style={{ fontSize: 15, fontWeight: 700, color: color || P.orange, marginBottom: 12, fontFamily: "Georgia,serif", letterSpacing: 1 }}>{title}</h4>
+      {children}
+    </div>
+  );
+  const Row = ({ title, body, last }) => (
+    <div style={{ marginBottom: last ? 0 : 12, paddingBottom: last ? 0 : 12, borderBottom: last ? "none" : "1px solid rgba(21,152,203,.08)" }}>
+      <p style={{ fontSize: 13, fontWeight: 700, color: P.off, marginBottom: 3 }}>{title}</p>
+      <p style={{ fontSize: 12, color: P.grey, lineHeight: 1.65 }}>{body}</p>
+    </div>
+  );
+  const houseRules = [
+    ["1. Legal Break Shot", "Cue ball must start fully behind the kitchen — the line formed by the two diamonds at the break line. If you miss the rack completely, take another shot. One retry only."],
+    ["2. Take What You Make", "Whichever group (solids or stripes) you pocket more of on the break becomes yours. If you make one of each, the table stays open."],
+    ["3. Eight-Ball on the Break", "Pocket the 8-ball on the break without scratching or jumping the cue ball = instant win."],
+    ["4. Scratch on a Legal Break", "Scratching on the break is never a loss (unless the 8 also drops). Opponent gets ball-in-hand behind the kitchen. No debates about where the base of the ball is."],
+    ["5. Play Out of the Kitchen", "When the cue ball is behind the break line, your first hit must contact a ball or rail outside the kitchen."],
+    ["6. Hit Your Own Balls First", "Must contact one of your own balls before anything else. Failure = loss of turn only — no ball-in-hand. Doing this on purpose is dirty pool."],
+    ["7. Balls Stay Down", "If you make a ball and scratch, that ball still counts and stays pocketed."],
+    ["8. Soft Calling (Be Honest)", "You don't need to call banks, kisses, or combos — just be honest about your intent. You may keep shooting only if you intended to make that ball, even if it drops in a different pocket. Accidentally making your opponent's ball = loss of turn."],
+    ["9. Eight-Ball Rules", "The 8-ball must be called, but you don't have to call the shot type. The 8-ball cannot be used in a combo. Hitting an opponent's ball first while shooting the 8 = loss of turn. Scratching or jumping the cue ball while shooting the 8 = loss of game."],
+    ["10. Sportsmanship", "Safeties are dirty pool unless they result from a genuine attempt to make a ball or break a cluster. If all your balls are tied up and there's truly no shot, say: \"Dude, I got nothing.\" Then play a shot that opens things up. Rail nursing or lagging the cue ball without touching the cluster will not be tolerated. Disputes = replay the shot. No arguments."],
+  ];
   return (
     <div style={{ paddingTop: 16 }}>
       <Tt>Rules & Scoring</Tt>
@@ -670,96 +694,94 @@ function RulesV() {
 
       {tab === "rules" && (
         <div>
-          <div style={gc}>
-            <h4 style={{ fontSize: 15, fontWeight: 700, color: P.orange, marginBottom: 12, fontFamily: "Georgia,serif" }}>General Etiquette</h4>
-            {[
-              ["Be on time", "Schedule and play your matches within the cycle window. Unplayed matches at cycle end are recorded as not played and count for neither player."],
-              ["Respect your opponent", "Good sportsmanship is expected at all times. Disputes should be settled amicably — if needed, bring it to the league admin."],
-              ["Report scores promptly", "Log your match result in the app as soon as the match is complete so standings stay current."],
-              ["Play all your matches", "Every match in your box should be played. Wild card matches are also expected to be completed within the cycle."],
-            ].map(([title, body]) => (
-              <div key={title} style={{ marginBottom: 14, paddingBottom: 14, borderBottom: "1px solid rgba(21,152,203,.08)" }}>
-                <p style={{ fontSize: 13, fontWeight: 700, color: P.off, marginBottom: 4 }}>{title}</p>
-                <p style={{ fontSize: 12, color: P.grey, lineHeight: 1.6 }}>{body}</p>
-              </div>
+          <Section title="League Etiquette">
+            <Row title="Keep it friendly" body="Keep matches friendly and respectful — this is for fun. Good sportsmanship is expected at all times." />
+            <Row title="Loser racks" body="Loser racks; winner breaks the next game." />
+            <Row title="Respect the environment" body="This is a work environment — respect people's time and calendars. Close the doors if matches take place during office hours." />
+            <Row title="No coaching" body="Don't coach or comment during another player's shot. No slamming cues, trash talk, or excessive celebrations." />
+            <Row title="Log scores immediately" body="Scores must be logged in the app immediately after the match. Completed scores can be corrected via the Matches tab." />
+            <Row title="Disputes" body="If a situation isn't covered, default to the DRA House Bar Rules. Universal rule: if there's a dispute — replay the shot. No exceptions." last />
+          </Section>
+          <Section title="League Format">
+            <Row title="Box Structure" body="Players are grouped into boxes of up to 4. Full round-robin within each box — 3 matches per cycle. New/returning players start in the Swing Box." />
+            <Row title="Promotion & Relegation" body="Top player in each box moves up one division at cycle end. Bottom player in each box moves down one division. New players are placed in the lowest available box for their first cycle." />
+            <Row title="Wild Cards" body="Each player gets 1 wild card cross-box match per cycle, randomly assigned." />
+            <Row title="Open Challenges" body="Open Challenges are unlimited — challenge anyone in the office for a bonus point. No penalty for a loss." />
+            <Row title="Inactivity" body="No match in 42 days → marked inactive and dropped to the bottom of the standings." last />
+          </Section>
+          <Section title="DRA House Bar Rules" color={P.blue}>
+            {houseRules.map(([title, body], i) => (
+              <Row key={title} title={title} body={body} last={i === houseRules.length - 1} />
             ))}
-          </div>
-          <div style={gc}>
-            <h4 style={{ fontSize: 15, fontWeight: 700, color: P.orange, marginBottom: 12, fontFamily: "Georgia,serif" }}>Match Format</h4>
-            {[
-              ["Box Play", "Each cycle, players are placed into boxes of 4 (or a Swing Box of 3). You play every other player in your box once."],
-              ["Wild Cards", "Each cycle includes wild card matches pairing players across different boxes for extra competition."],
-              ["Open Challenges", "Players can issue open challenges to anyone in the league at any time for fun — these earn 1 point per win."],
-              ["Cycle Duration", "Each cycle runs for a set number of weeks (configurable by the admin). The countdown is shown at the top of the app."],
-            ].map(([title, body]) => (
-              <div key={title} style={{ marginBottom: 14, paddingBottom: 14, borderBottom: "1px solid rgba(21,152,203,.08)" }}>
-                <p style={{ fontSize: 13, fontWeight: 700, color: P.off, marginBottom: 4 }}>{title}</p>
-                <p style={{ fontSize: 12, color: P.grey, lineHeight: 1.6 }}>{body}</p>
-              </div>
-            ))}
+          </Section>
+          <div style={{ ...gc, background: "rgba(241,138,0,.08)", border: "1px solid rgba(241,138,0,.25)", textAlign: "center" }}>
+            <p style={{ fontSize: 13, fontWeight: 700, color: P.orange }}>Good shots. Good drinks. Good vibes. 🎱</p>
           </div>
         </div>
       )}
 
       {tab === "scoring" && (
         <div>
-          <div style={gc}>
-            <h4 style={{ fontSize: 15, fontWeight: 700, color: P.orange, marginBottom: 12, fontFamily: "Georgia,serif" }}>Match Points</h4>
-            <p style={{ fontSize: 11, color: P.dim, marginBottom: 12 }}>Applies to box matches and wild card matches.</p>
+          <Section title="Match Points">
+            <p style={{ fontSize: 11, color: P.dim, marginBottom: 12 }}>Applies to box matches and wild card matches. Best of 3 games (race to 2).</p>
             <div style={{ borderRadius: 12, overflow: "hidden", border: "1px solid rgba(255,255,255,.1)" }}>
               {[
-                ["Shutout Win", "Win with opponent scoring 0", "5 pts", P.orange],
-                ["Win", "Win with opponent scoring ≥ 1", "4 pts", P.amber],
-                ["Loss with score", "Lose but score at least 1", "2 pts", P.blue],
-                ["Shutout Loss", "Lose without scoring", "0 pts", P.bad],
+                ["Win 2–0", "Shutout — opponent scores 0 games", "5 pts", P.orange],
+                ["Win 2–1", "Win with opponent scoring 1 game", "4 pts", P.amber],
+                ["Loss 1–2", "Lose but score 1 game", "2 pts", P.blue],
+                ["Loss 0–2", "Lose without scoring", "0 pts", P.bad],
               ].map(([result, desc, pts, color], i) => (
                 <div key={result} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: i % 2 === 0 ? "rgba(0,48,82,.4)" : "transparent", borderBottom: i < 3 ? "1px solid rgba(255,255,255,.05)" : "none" }}>
                   <div style={{ flex: 1 }}>
-                    <p style={{ fontSize: 12, fontWeight: 700, color: P.off, marginBottom: 2 }}>{result}</p>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: P.off, marginBottom: 2 }}>{result}</p>
                     <p style={{ fontSize: 10, color: P.dim }}>{desc}</p>
                   </div>
-                  <span style={{ fontSize: 18, fontWeight: 700, color, minWidth: 44, textAlign: "right" }}>{pts}</span>
+                  <span style={{ fontSize: 20, fontWeight: 700, color, minWidth: 48, textAlign: "right" }}>{pts}</span>
                 </div>
               ))}
             </div>
-          </div>
-          <div style={gc}>
-            <h4 style={{ fontSize: 15, fontWeight: 700, color: P.orange, marginBottom: 12, fontFamily: "Georgia,serif" }}>End-of-Cycle Bonuses</h4>
-            <p style={{ fontSize: 11, color: P.dim, marginBottom: 12 }}>Awarded when all matches in a box are complete.</p>
+            <p style={{ fontSize: 10, color: P.dim, marginTop: 8 }}>Tiebreaker: head-to-head result, then total racks won.</p>
+          </Section>
+          <Section title="End-of-Cycle Bonuses">
+            <p style={{ fontSize: 11, color: P.dim, marginBottom: 12 }}>Awarded automatically when all matches in a box are complete.</p>
             <div style={{ borderRadius: 12, overflow: "hidden", border: "1px solid rgba(255,255,255,.1)" }}>
               {[
-                ["Box Winner", "Finish 1st in your box", "+3 pts", P.orange],
-                ["Box Runner-Up", "Finish 2nd in your box", "+1 pt", P.grey],
+                ["Box 1st Place", "Finish 1st in your box — Cycle Champion 🏆", "+3 pts", P.orange],
+                ["Box 2nd Place", "Finish 2nd in your box", "+1 pt", P.grey],
               ].map(([result, desc, pts, color], i) => (
                 <div key={result} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: i % 2 === 0 ? "rgba(0,48,82,.4)" : "transparent", borderBottom: i < 1 ? "1px solid rgba(255,255,255,.05)" : "none" }}>
                   <div style={{ flex: 1 }}>
-                    <p style={{ fontSize: 12, fontWeight: 700, color: P.off, marginBottom: 2 }}>{result}</p>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: P.off, marginBottom: 2 }}>{result}</p>
                     <p style={{ fontSize: 10, color: P.dim }}>{desc}</p>
                   </div>
-                  <span style={{ fontSize: 18, fontWeight: 700, color, minWidth: 44, textAlign: "right" }}>{pts}</span>
+                  <span style={{ fontSize: 20, fontWeight: 700, color, minWidth: 48, textAlign: "right" }}>{pts}</span>
                 </div>
               ))}
             </div>
-          </div>
-          <div style={gc}>
-            <h4 style={{ fontSize: 15, fontWeight: 700, color: P.orange, marginBottom: 12, fontFamily: "Georgia,serif" }}>Open Challenges</h4>
+          </Section>
+          <Section title="Open Challenges">
             <div style={{ borderRadius: 12, overflow: "hidden", border: "1px solid rgba(255,255,255,.1)" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "rgba(0,48,82,.4)" }}>
-                <div style={{ flex: 1 }}>
-                  <p style={{ fontSize: 12, fontWeight: 700, color: P.off, marginBottom: 2 }}>Win</p>
-                  <p style={{ fontSize: 10, color: P.dim }}>Defeat any opponent in an open challenge</p>
+              {[
+                ["Win", "Defeat any opponent in an open challenge", "+1 pt", P.blue],
+                ["Loss", "Open challenge loss — no penalty", "0 pts", P.dim],
+              ].map(([result, desc, pts, color], i) => (
+                <div key={result} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: i % 2 === 0 ? "rgba(0,48,82,.4)" : "transparent", borderBottom: i < 1 ? "1px solid rgba(255,255,255,.05)" : "none" }}>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: P.off, marginBottom: 2 }}>{result}</p>
+                    <p style={{ fontSize: 10, color: P.dim }}>{desc}</p>
+                  </div>
+                  <span style={{ fontSize: 20, fontWeight: 700, color, minWidth: 48, textAlign: "right" }}>{pts}</span>
                 </div>
-                <span style={{ fontSize: 18, fontWeight: 700, color: P.blue, minWidth: 44, textAlign: "right" }}>1 pt</span>
-              </div>
+              ))}
             </div>
-          </div>
+          </Section>
           <div style={{ ...gc, background: "rgba(21,152,203,.06)", border: "1px solid rgba(21,152,203,.2)" }}>
-            <h4 style={{ fontSize: 13, fontWeight: 700, color: P.blue, marginBottom: 10 }}>Example: Best Possible Cycle</h4>
-            <p style={{ fontSize: 11, color: P.grey, lineHeight: 1.7 }}>
-              Win all 3 box matches by shutout → <span style={{ color: P.orange, fontWeight: 700 }}>15 pts</span><br />
-              + Box winner bonus → <span style={{ color: P.orange, fontWeight: 700 }}>+3 pts</span><br />
-              + Win wild card → <span style={{ color: P.orange, fontWeight: 700 }}>+4 pts</span><br />
-              <span style={{ color: P.off, fontWeight: 700 }}>Total: 22 pts</span>
+            <h4 style={{ fontSize: 13, fontWeight: 700, color: P.blue, marginBottom: 10 }}>Best Possible Cycle</h4>
+            <p style={{ fontSize: 12, color: P.grey, lineHeight: 1.8 }}>
+              3× shutout box wins (3 × 5) → <span style={{ color: P.orange, fontWeight: 700 }}>15 pts</span><br />
+              Box winner bonus → <span style={{ color: P.orange, fontWeight: 700 }}>+3 pts</span><br />
+              Wild card shutout win → <span style={{ color: P.orange, fontWeight: 700 }}>+5 pts</span><br />
+              <span style={{ color: P.off, fontWeight: 700, fontSize: 13 }}>Total: 23 pts</span>
             </p>
           </div>
         </div>
