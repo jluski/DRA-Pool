@@ -319,6 +319,26 @@ function Home({ st, ladder, gn, ini, cd }) {
   const last5 = (st.openChallenges || []).filter(m => m.completed).slice(-5).reverse();
   const getS = (bm, p1, p2) => { const m = bm.find(m => (m.player1 === p1 && m.player2 === p2) || (m.player1 === p2 && m.player2 === p1)); if (!m) return null; if (!m.completed) return { pending: true }; return { s1: m.player1 === p1 ? m.score1 : m.score2, s2: m.player1 === p1 ? m.score2 : m.score1 }; };
 
+  const getPlayerHistory = (pid) => {
+    const results = [];
+    const collect = (matches) => {
+      (matches || []).forEach(m => {
+        if (!m.completed) return;
+        if (m.player1 !== pid && m.player2 !== pid) return;
+        const isP1 = m.player1 === pid;
+        const myScore  = isP1 ? m.score1 : m.score2;
+        const oppScore = isP1 ? m.score2 : m.score1;
+        const oppId    = isP1 ? m.player2 : m.player1;
+        const typeLabel = m.type === "wildcard" ? "Wild Card" : m.type === "open" ? "Open" : "Box";
+        results.push({ id: m.id, oppName: gn(oppId), typeLabel, won: myScore > oppScore, myScore, oppScore, completedAt: m.completedAt || "", forfeit: !!m.forfeit });
+      });
+    };
+    collect(st.boxMatches); collect(st.wildCards); collect(st.openChallenges);
+    [...(st.pastCycles || [])].reverse().forEach(c => { collect(c.boxMatches); collect(c.wildCards); collect(c.openChallenges); });
+    results.sort((a, b) => b.completedAt.localeCompare(a.completedAt));
+    return results.slice(0, 10);
+  };
+
   // Last completed cycle champions (all box winners)
   const lastCyc = st.pastCycles && st.pastCycles.length ? st.pastCycles[st.pastCycles.length - 1] : null;
   const lastChamps = lastCyc
@@ -435,13 +455,33 @@ function Home({ st, ladder, gn, ini, cd }) {
                   <span style={{ width: 22, color: P.bad, fontSize: 11 }}>{s.losses}</span>
                 </div>
                 {exp === s.id && (
-                  <div style={{ padding: "8px 12px 10px 12px", background: "rgba(0,20,40,.7)", borderBottom: "1px solid rgba(21,152,203,.08)", display: "flex", gap: 14, flexWrap: "wrap", animation: "fadeIn .15s" }}>
-                    <span style={{ fontSize: 11, color: P.grey }}>W/L: <span style={{ color: P.ok }}>{s.wins}</span>/<span style={{ color: P.bad }}>{s.losses}</span></span>
-                    <span style={{ fontSize: 11, color: P.grey }}>Games: <span style={{ color: P.off }}>{s.rw}-{s.rl}</span></span>
-                    <span style={{ fontSize: 11, color: P.grey }}>Played: <span style={{ color: P.off }}>{s.mp}</span></span>
-                    {s.streak >= 3 && <span style={{ fontSize: 11, color: P.orange }}>{"\ud83d\udd25"} {s.streak} streak</span>}
-                    <span style={{ fontSize: 11, color: P.grey }}>Last: <span style={{ color: P.off }}>{s.last ? new Date(s.last).toLocaleDateString() : "N/A"}</span></span>
-                    {s.inactive && <span style={{ fontSize: 11, color: P.bad }}>Inactive</span>}
+                  <div style={{ padding: "8px 12px 10px 12px", background: "rgba(0,20,40,.7)", borderBottom: "1px solid rgba(21,152,203,.08)", animation: "fadeIn .15s" }}>
+                    <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 8 }}>
+                      <span style={{ fontSize: 11, color: P.grey }}>W/L: <span style={{ color: P.ok }}>{s.wins}</span>/<span style={{ color: P.bad }}>{s.losses}</span></span>
+                      <span style={{ fontSize: 11, color: P.grey }}>Games: <span style={{ color: P.off }}>{s.rw}-{s.rl}</span></span>
+                      <span style={{ fontSize: 11, color: P.grey }}>Played: <span style={{ color: P.off }}>{s.mp}</span></span>
+                      {s.streak >= 3 && <span style={{ fontSize: 11, color: P.orange }}>{"\ud83d\udd25"} {s.streak} streak</span>}
+                      <span style={{ fontSize: 11, color: P.grey }}>Last: <span style={{ color: P.off }}>{s.last ? new Date(s.last).toLocaleDateString() : "N/A"}</span></span>
+                      {s.inactive && <span style={{ fontSize: 11, color: P.bad }}>Inactive</span>}
+                    </div>
+                    {(() => {
+                      const hist = getPlayerHistory(s.id);
+                      if (!hist.length) return <p style={{ fontSize: 10, color: P.dim, fontStyle: "italic" }}>No match history.</p>;
+                      return (
+                        <div>
+                          <p style={{ fontSize: 9, fontWeight: 700, color: P.blue, letterSpacing: 2, textTransform: "uppercase", marginBottom: 5 }}>Match History</p>
+                          {hist.map(h => (
+                            <div key={h.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 0", borderBottom: "1px solid rgba(21,152,203,.06)" }}>
+                              <span style={{ fontSize: 10, fontWeight: 700, color: h.forfeit ? P.dim : h.won ? P.ok : P.bad, width: 14, flexShrink: 0 }}>{h.forfeit ? "FF" : h.won ? "W" : "L"}</span>
+                              <span style={{ fontSize: 11, color: P.off, width: 30, flexShrink: 0 }}>{h.forfeit ? "—" : h.myScore + "-" + h.oppScore}</span>
+                              <span style={{ fontSize: 11, color: P.white, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>vs {h.oppName}</span>
+                              <span style={{ fontSize: 9, fontWeight: 700, color: h.typeLabel === "Open" ? P.blue : h.typeLabel === "Wild Card" ? P.amber : P.orange, flexShrink: 0 }}>{h.typeLabel}</span>
+                              <span style={{ fontSize: 9, color: P.dim, flexShrink: 0, marginLeft: 2 }}>{h.completedAt ? fmtDate(h.completedAt) : ""}</span>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
               </div>
