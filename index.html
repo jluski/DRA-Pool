@@ -270,14 +270,15 @@ function App() {
   // Compute seeded boxes for admin preview — does NOT write to Firestore
   const previewCyc = (randomize = false) => {
     if (st.checkedIn.length < 4) { flash("Need 4+"); return null; }
+    if (st.cycleNumber > 0 && (st.boxes || []).length > 0) { flash("Round already in progress"); return null; }
     const past = buildArchive();
     const nl = calcLad(st.players, { ...st, pastCycles: past, boxMatches: [], wildCards: [], openChallenges: [], boxes: [] });
     const lastSeeded = [...past].reverse().find(c => !c.randomized);
     let adjustedNl = nl;
     const adj = {};
+    let eloResult = null; let eloFrac = {};
     if (!randomize && lastSeeded) {
       const numBoxes = lastSeeded.boxes.length;
-      const lastSeededIds = new Set(lastSeeded.boxes.flatMap(b => b.players));
       lastSeeded.boxes.forEach((box, bi) => {
         const bm = (lastSeeded.boxMatches || []).filter(m => m.box === bi);
         // Only real (non-forfeit, non-zero) matches count; threshold scales with box size
@@ -289,8 +290,29 @@ function App() {
         if (bi > 0 && standing[0]) adj[standing[0].id] = -4;
         if (bi < numBoxes - 1 && standing[standing.length - 1]) adj[standing[standing.length - 1].id] = +4;
       });
+      // Build last round's seed position map — the base for movement guarantees exactly ±1 box
+      const lastSeedPos = {}; let _pos = 0;
+      lastSeeded.boxes.forEach(box => { box.players.forEach(pid => { lastSeedPos[pid] = _pos++; }); });
+      // ELO as fractional tiebreaker [0, 0.99] — never independently crosses a box boundary
+      const ELO_MIN = 3;
+      eloResult = calcElo(st.players, { ...st, pastCycles: past, boxMatches: [], wildCards: [], openChallenges: [] });
+      const qualIds = st.checkedIn.filter(id => lastSeedPos[id] !== undefined && (eloResult.played[id] || 0) >= ELO_MIN);
+      const qualRatings = qualIds.map(id => eloResult.ratings[id] || 1000);
+      const eloMin = qualRatings.length > 1 ? Math.min(...qualRatings) : 1000;
+      const eloMax = qualRatings.length > 1 ? Math.max(...qualRatings) : 1000;
+      const eloRange = eloMax - eloMin;
+      st.checkedIn.forEach(id => {
+        if (lastSeedPos[id] === undefined || (eloResult.played[id] || 0) < ELO_MIN || eloRange === 0) { eloFrac[id] = 0; return; }
+        const norm = ((eloResult.ratings[id] || 1000) - eloMin) / eloRange; // 1.0 = highest ELO
+        eloFrac[id] = (1 - norm) * 0.99; // 0.0 = best ELO seed, 0.99 = worst
+      });
       adjustedNl = nl
-        .map((p, i) => ({ ...p, _seed: lastSeededIds.has(p.id) ? i + (adj[p.id] || 0) : 9999 + i }))
+        .map((p, i) => ({
+          ...p,
+          _seed: lastSeedPos[p.id] !== undefined
+            ? lastSeedPos[p.id] + (adj[p.id] || 0) + (eloFrac[p.id] || 0)
+            : 9999 + i // Absent/new players go to Swing Box
+        }))
         .sort((a, b) => a._seed - b._seed);
     }
     // Build per-player seeding reason for admin preview UI
@@ -318,7 +340,7 @@ function App() {
         playerReasons[pid] = { reason: everPlayed ? "returning" : "new", fromBox: null, lastRecord: null };
       });
     }
-    return { randomize, suggestedBoxes: buildBoxes(st.checkedIn, adjustedNl, randomize), playerReasons };
+    return { randomize, suggestedBoxes: buildBoxes(st.checkedIn, adjustedNl, randomize), playerReasons, eloRatings: eloResult ? eloResult.ratings : {}, eloPlayed: eloResult ? eloResult.played : {}, eloFrac };
   };
   // Confirm: save admin-approved (possibly adjusted) boxes to Firestore
   const confirmCyc = (finalBoxes, randomize, movedIds) => {
@@ -1329,6 +1351,7 @@ function AdminV({ st, ladder, previewCyc, confirmCyc, completeCyc, endEarlyCyc, 
   const [swapSrc, setSwapSrc] = useState(null); // { boxIdx, playerId }
   const [manuallyMoved, setManuallyMoved] = useState(new Set());
   const [playerReasons, setPlayerReasons] = useState({});
+  const [previewElo, setPreviewElo] = useState({ ratings: {}, played: {}, frac: {} });
   const daysInCycle = st.cycleStart ? dd(nw(), st.cycleStart) : 0;
   const pendingMatches = [
     ...(st.boxMatches || []).filter(m => !m.completed).map(m => ({ ...m, matchType: "Box", label: m.boxName || "Box" })),
@@ -1400,6 +1423,7 @@ function AdminV({ st, ladder, previewCyc, confirmCyc, completeCyc, endEarlyCyc, 
                     <span style={{ flex: 1, fontSize: 13, color: P.off, fontWeight: isSrc ? 700 : 500 }}>{gn(pid)}</span>
                     {lrank && <span style={{ fontSize: 10, color: P.orange, fontWeight: 700 }}>#{lrank.rank}</span>}
                     {lrank && <span style={{ fontSize: 10, color: P.dim }}>{lrank.points}pts</span>}
+                    {(previewElo.played[pid] || 0) >= 3 && <span style={{ fontSize: 9, color: (previewElo.frac[pid] || 0) < 0.33 ? P.ok : (previewElo.frac[pid] || 0) > 0.66 ? P.bad : P.dim, fontWeight: 600 }}>ELO {Math.round(previewElo.ratings[pid] || 1000)}</span>}
                     {isMoved && <span style={{ fontSize: 9, color: P.orange, fontWeight: 700, background: "rgba(241,138,0,.15)", border: "1px solid rgba(241,138,0,.3)", borderRadius: 4, padding: "1px 5px" }}>MOVED</span>}
                     <span style={{ fontSize: 13, color: isSrc ? P.blue : P.dim }}>⇄</span>
                   </div>
@@ -1534,6 +1558,7 @@ function AdminV({ st, ladder, previewCyc, confirmCyc, completeCyc, endEarlyCyc, 
                 setManuallyMoved(new Set());
                 setSwapSrc(null);
                 setPlayerReasons(data.playerReasons || {});
+                setPreviewElo({ ratings: data.eloRatings || {}, played: data.eloPlayed || {}, frac: data.eloFrac || {} });
                 setShowBoxPreview(true);
                 setCc(false);
                 setRandomRound(false);
