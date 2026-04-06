@@ -259,9 +259,7 @@ function App() {
     }
     const nl = calcLad(st.players, { ...st, pastCycles: past, boxMatches: [], wildCards: [], openChallenges: [], boxes: [] });
     const boxes = buildBoxes(st.checkedIn, nl, randomize); const bm = genBM(boxes); const wc = genWC(boxes);
-    const lastCyc = past[past.length - 1];
-    const autoCI = lastCyc ? [...new Set([...(lastCyc.boxMatches || []), ...(lastCyc.wildCards || []), ...(lastCyc.openChallenges || [])].filter(m => m.completed && !m.forfeit && !(m.score1 === 0 && m.score2 === 0)).flatMap(m => [m.player1, m.player2]))].filter(id => st.players.some(p => p.id === id)) : [];
-    const ns = { ...st, pastCycles: past, boxes, boxMatches: bm, wildCards: wc, openChallenges: [], checkedIn: autoCI, cycleStart: nw(), cycleNumber: st.cycleNumber + 1, cycleRandomized: randomize };
+    const ns = { ...st, pastCycles: past, boxes, boxMatches: bm, wildCards: wc, openChallenges: [], checkedIn: [], cycleStart: nw(), cycleNumber: st.cycleNumber + 1, cycleRandomized: randomize };
     save(withLog(ns, "CYCLE_STARTED", "Round " + (st.cycleNumber + 1)));
     flash("Round " + (st.cycleNumber + 1) + " started!");
   };
@@ -441,7 +439,7 @@ function Home({ st, ladder, gn, ini, cd, onJoin }) {
       {lastChamps.length > 0 && (
         <div style={{ ...gc, padding: "12px 16px", background: "linear-gradient(135deg, rgba(241,138,0,.12), rgba(21,152,203,.08))", borderColor: "rgba(241,138,0,.3)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <p style={{ fontSize: 9, color: P.orange, letterSpacing: 3, fontWeight: 700 }}>ROUND {lastCyc.cycle} CHAMPIONS</p>
+            <p style={{ fontSize: 9, color: lastCyc.randomized ? P.wc : P.orange, letterSpacing: 3, fontWeight: 700 }}>{lastCyc.randomized ? "🎲 " : ""}ROUND {lastCyc.cycle} {lastCyc.randomized ? "BOX WINNERS" : "CHAMPIONS"}</p>
             {st.pastCycles.length > 1 && (
               <button onClick={() => setShowChampHistory(v => !v)} style={{ fontSize: 9, fontWeight: 700, padding: "3px 10px", borderRadius: 10, background: showChampHistory ? "rgba(241,138,0,.2)" : "transparent", border: "1px solid rgba(241,138,0,.4)", color: P.amber, cursor: "pointer" }}>
                 {"\ud83c\udfc6"} History {showChampHistory ? "▲" : "▼"}
@@ -450,8 +448,8 @@ function Home({ st, ladder, gn, ini, cd, onJoin }) {
           </div>
           {lastChamps.map((w, i) => (
             <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 0", borderBottom: i < lastChamps.length - 1 ? "1px solid rgba(21,152,203,.08)" : "none" }}>
-              <span style={{ fontSize: 9, fontWeight: 700, color: w.isSwing ? P.blue : P.orange, width: 60 }}>{w.box}</span>
-              <span style={{ flex: 1, fontSize: 13, color: P.white, fontWeight: 600, fontFamily: "Georgia,serif" }}>{"\ud83e\udd47"} {w.name}</span>
+              <span style={{ fontSize: 9, fontWeight: 700, color: lastCyc.randomized ? P.wc : (w.isSwing ? P.blue : P.orange), width: 60 }}>{w.box}</span>
+              <span style={{ flex: 1, fontSize: 13, color: P.white, fontWeight: 600, fontFamily: "Georgia,serif" }}>{lastCyc.randomized ? "🎱" : "\ud83e\udd47"} {w.name}</span>
             </div>
           ))}
           {showChampHistory && (
@@ -461,9 +459,9 @@ function Home({ st, ladder, gn, ini, cd, onJoin }) {
                 if (!cChamps.length) return null;
                 return (
                   <div key={c.cycle} style={{ marginBottom: 10 }}>
-                    <p style={{ fontSize: 9, color: P.dim, fontWeight: 700, letterSpacing: 1, marginBottom: 4 }}>ROUND {c.cycle} · {fmtDate(c.startedAt)}</p>
+                    <p style={{ fontSize: 9, color: c.randomized ? P.wc : P.dim, fontWeight: 700, letterSpacing: 1, marginBottom: 4 }}>{c.randomized ? "🎲 " : ""}ROUND {c.cycle} · {fmtDate(c.startedAt)}</p>
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      {cChamps.map((w, i) => <span key={i} style={{ fontSize: 10, color: P.off, background: "rgba(0,48,82,.4)", padding: "3px 8px", borderRadius: 6 }}>{"\ud83e\udd47"} {w.box}: {w.name}</span>)}
+                      {cChamps.map((w, i) => <span key={i} style={{ fontSize: 10, color: P.off, background: c.randomized ? "rgba(196,161,255,.12)" : "rgba(0,48,82,.4)", padding: "3px 8px", borderRadius: 6 }}>{c.randomized ? "🎱" : "\ud83e\udd47"} {w.box}: {w.name}</span>)}
                     </div>
                   </div>
                 );
@@ -1232,25 +1230,37 @@ function AdminV({ st, ladder, startCyc, completeCyc, undoCyc, resetAll, addP, rm
           {st.checkedIn.length > 0 && (() => {
             const N = st.checkedIn.length;
             let suggestion;
-            if (N % 4 === 0) suggestion = (N / 4) + " box" + (N / 4 !== 1 ? "es" : "") + " of 4 — perfect fit";
+            if (N < 4) suggestion = "Need 4+ players to start";
+            else if (N % 4 === 0) suggestion = (N / 4) + " box" + (N / 4 !== 1 ? "es" : "") + " of 4 — perfect fit";
             else if (N % 4 === 1) suggestion = (Math.floor(N / 4) - 1) + " boxes of 4 + swing of 5 (or remove 1)";
             else if (N % 4 === 2) suggestion = Math.floor(N / 4) + " box" + (Math.floor(N / 4) !== 1 ? "es" : "") + " of 4 + swing of 6";
             else suggestion = Math.floor(N / 4) + " box" + (Math.floor(N / 4) !== 1 ? "es" : "") + " of 4 + swing of 3";
+            const ciElo = calcElo(st.players, st);
+            const bwIds = new Set([...(st.boxMatches || []), ...(st.wildCards || [])].filter(m => m.completed && !m.forfeit).flatMap(m => [m.player1, m.player2]));
+            const acIds = new Set([...(st.boxMatches || []), ...(st.wildCards || []), ...(st.openChallenges || [])].filter(m => m.completed && !m.forfeit).flatMap(m => [m.player1, m.player2]));
             return (
               <div style={{ marginBottom: 10 }}>
                 <div onClick={() => setShowCheckedIn(v => !v)} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", marginBottom: 4 }}>
                   <span style={{ fontSize: 9, fontWeight: 700, color: P.dim }}>{showCheckedIn ? "▼" : "▶"}</span>
                   <span style={{ fontSize: 11, fontWeight: 700, color: P.grey }}>SIGNED UP ({N})</span>
-                  <span style={{ fontSize: 10, color: P.dim, marginLeft: "auto" }}>{suggestion}</span>
+                  <span style={{ fontSize: 10, color: N < 4 ? P.bad : P.dim, marginLeft: "auto" }}>{suggestion}</span>
                 </div>
                 {showCheckedIn && (
                   <div style={{ background: "rgba(0,20,40,.4)", borderRadius: 10, padding: "6px 10px" }}>
-                    {st.checkedIn.map(id => (
-                      <div key={id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 0", borderBottom: "1px solid rgba(21,152,203,.06)" }}>
-                        <span style={{ flex: 1, fontSize: 12, color: P.off }}>{gn(id)}</span>
-                        <button onClick={() => togCI(id)} style={{ background: "transparent", border: "1px solid " + P.bad, borderRadius: 6, color: P.bad, fontSize: 10, fontWeight: 700, padding: "2px 8px", cursor: "pointer" }}>Remove</button>
-                      </div>
-                    ))}
+                    {st.checkedIn.map(id => {
+                      const elo = (ciElo.played[id] || 0) >= 3 ? Math.round(ciElo.ratings[id] || 1000) : null;
+                      const isRet = bwIds.has(id);
+                      const isNew = !acIds.has(id);
+                      return (
+                        <div key={id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 0", borderBottom: "1px solid rgba(21,152,203,.06)" }}>
+                          {isRet && <span style={{ fontSize: 8, color: P.ok, fontWeight: 700, background: "rgba(52,211,153,.12)", border: "1px solid rgba(52,211,153,.35)", borderRadius: 4, padding: "1px 5px" }}>RETURNING</span>}
+                          {!isRet && isNew && <span style={{ fontSize: 8, color: P.orange, fontWeight: 700, background: "rgba(241,138,0,.15)", border: "1px solid rgba(241,138,0,.3)", borderRadius: 4, padding: "1px 5px" }}>NEW</span>}
+                          <span style={{ flex: 1, fontSize: 12, color: P.off }}>{gn(id)}</span>
+                          {elo && <span style={{ fontSize: 10, color: P.dim, fontWeight: 600 }}>{elo}</span>}
+                          <button onClick={() => togCI(id)} style={{ background: "transparent", border: "1px solid " + P.bad, borderRadius: 6, color: P.bad, fontSize: 10, fontWeight: 700, padding: "2px 8px", cursor: "pointer" }}>Remove</button>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
