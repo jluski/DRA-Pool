@@ -256,16 +256,21 @@ function App() {
     save(withLog({ ...st, pastCycles: past, boxes: [], boxMatches: [], wildCards: [], openChallenges: [] }, "CYCLE_ENDED_EARLY", "Round " + st.cycleNumber));
     flash("Round " + st.cycleNumber + " ended.");
   };
-  const startCyc = (randomize = false) => {
-    if (st.checkedIn.length < 4) { flash("Need 4+"); return; }
-    let past = st.pastCycles;
+  // Build the archive object for the current round (dry-run, no save)
+  const buildArchive = () => {
     if (st.cycleNumber > 0 && (st.boxes || []).length > 0) {
       const bon = [];
-      const afBM = (st.boxMatches || []).map(m => { if (!m.completed) { return { ...m, score1: 0, score2: 0, completed: true, completedAt: nw(), forfeit: true, autoForfeit: true }; } return m; });
-      const afWC = (st.wildCards || []).map(m => { if (!m.completed) { return { ...m, score1: 0, score2: 0, completed: true, completedAt: nw(), forfeit: true, autoForfeit: true }; } return m; });
+      const afBM = (st.boxMatches || []).map(m => !m.completed ? { ...m, score1: 0, score2: 0, completed: true, completedAt: nw(), forfeit: true, autoForfeit: true } : m);
+      const afWC = (st.wildCards || []).map(m => !m.completed ? { ...m, score1: 0, score2: 0, completed: true, completedAt: nw(), forfeit: true, autoForfeit: true } : m);
       if (st.boxes) st.boxes.forEach((box, bi) => { const bm = afBM.filter(m => m.box === bi); if (bm.length > 0 && bm.every(m => m.completed)) { const bs = boxSt(box.players, bm); if (bs[0]) bon.push({ id: bs[0].id, pts: 3 }); if (bs[1]) bon.push({ id: bs[1].id, pts: 1 }); } });
-      past = [...st.pastCycles, { cycle: st.cycleNumber, boxMatches: afBM, wildCards: afWC, openChallenges: st.openChallenges, boxes: st.boxes, bonuses: [...bon], startedAt: st.cycleStart, randomized: randomize }];
+      return [...st.pastCycles, { cycle: st.cycleNumber, boxMatches: afBM, wildCards: afWC, openChallenges: st.openChallenges || [], boxes: st.boxes || [], bonuses: [...bon], startedAt: st.cycleStart, randomized: st.cycleRandomized || false }];
     }
+    return st.pastCycles;
+  };
+  // Compute seeded boxes for admin preview — does NOT write to Firestore
+  const previewCyc = (randomize = false) => {
+    if (st.checkedIn.length < 4) { flash("Need 4+"); return null; }
+    const past = buildArchive();
     const nl = calcLad(st.players, { ...st, pastCycles: past, boxMatches: [], wildCards: [], openChallenges: [], boxes: [] });
     const lastSeeded = [...past].reverse().find(c => !c.randomized);
     let adjustedNl = nl;
@@ -275,24 +280,26 @@ function App() {
       const lastSeededIds = new Set(lastSeeded.boxes.flatMap(b => b.players));
       lastSeeded.boxes.forEach((box, bi) => {
         const bm = (lastSeeded.boxMatches || []).filter(m => m.box === bi);
-        const hasRealMatches = bm.some(m => m.completed && !m.forfeit && !(m.score1 === 0 && m.score2 === 0));
-        if (!hasRealMatches) return;
-        const standing = boxSt(box.players, bm);
+        // Only real (non-forfeit, non-zero) matches count; threshold scales with box size
+        const realMatches = bm.filter(m => m.completed && !m.forfeit && !(m.score1 === 0 && m.score2 === 0));
+        const threshold = Math.ceil(box.players.length / 2);
+        if (realMatches.length < threshold) return;
+        const standing = boxSt(box.players, realMatches);
         if (!standing.length) return;
         if (bi > 0 && standing[0]) adj[standing[0].id] = -4;
         if (bi < numBoxes - 1 && standing[standing.length - 1]) adj[standing[standing.length - 1].id] = +4;
       });
       adjustedNl = nl
-        .map((p, i) => ({
-          ...p,
-          _seed: lastSeededIds.has(p.id)
-            ? i + (adj[p.id] || 0)
-            : 9999 + i
-        }))
+        .map((p, i) => ({ ...p, _seed: lastSeededIds.has(p.id) ? i + (adj[p.id] || 0) : 9999 + i }))
         .sort((a, b) => a._seed - b._seed);
     }
-    const boxes = buildBoxes(st.checkedIn, adjustedNl, randomize); const bm = genBM(boxes); const wc = genWC(boxes);
-    const ns = { ...st, pastCycles: past, boxes, boxMatches: bm, wildCards: wc, openChallenges: [], checkedIn: [], cycleStart: nw(), cycleNumber: st.cycleNumber + 1, cycleRandomized: randomize };
+    return { past, randomize, suggestedBoxes: buildBoxes(st.checkedIn, adjustedNl, randomize) };
+  };
+  // Confirm: save admin-approved (possibly adjusted) boxes to Firestore
+  const confirmCyc = (finalBoxes, past, randomize, movedIds) => {
+    const stampedBoxes = finalBoxes.map(box => ({ ...box, manuallyPlaced: box.players.filter(id => movedIds.has(id)) }));
+    const bm = genBM(stampedBoxes); const wc = genWC(stampedBoxes);
+    const ns = { ...st, pastCycles: past, boxes: stampedBoxes, boxMatches: bm, wildCards: wc, openChallenges: [], checkedIn: [], cycleStart: nw(), cycleNumber: st.cycleNumber + 1, cycleRandomized: randomize };
     save(withLog(ns, "CYCLE_STARTED", "Round " + (st.cycleNumber + 1)));
     flash("Round " + (st.cycleNumber + 1) + " started!");
   };
@@ -354,7 +361,7 @@ function App() {
         {view === "challenge" && <ChallengeV players={st.players} newOC={newOC} />}
         {view === "checkin" && <CheckInV st={st} ladder={ladder} togCI={togCI} autoOpen={checkInFocus} onAutoOpenDone={() => setCheckInFocus(false)} />}
         {view === "rules" && <RulesV />}
-        {view === "admin" && <AdminV st={st} ladder={ladder} startCyc={startCyc} completeCyc={completeCyc} endEarlyCyc={endEarlyCyc} undoCyc={undoCyc} resetAll={resetAll} addP={addP} rmP={rmP} ffM={ffM} gn={gn} save={save} togCI={togCI} />}
+        {view === "admin" && <AdminV st={st} ladder={ladder} previewCyc={previewCyc} confirmCyc={confirmCyc} completeCyc={completeCyc} endEarlyCyc={endEarlyCyc} undoCyc={undoCyc} resetAll={resetAll} addP={addP} rmP={rmP} ffM={ffM} gn={gn} save={save} togCI={togCI} />}
       </main>
       <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 10, padding: "0 14px", paddingBottom: "max(10px, env(safe-area-inset-bottom))" }}>
         <nav style={{ display: "flex", justifyContent: "space-around", alignItems: "center", padding: "6px 4px", background: "rgba(255,255,255,.08)", backdropFilter: "blur(40px) saturate(200%)", WebkitBackdropFilter: "blur(40px) saturate(200%)", borderRadius: 28, border: "1px solid rgba(255,255,255,.18)", borderTop: "1px solid rgba(255,255,255,.28)", boxShadow: "0 8px 40px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.18)", position: "relative", marginBottom: 8, overflow: "hidden" }}>
@@ -1280,13 +1287,21 @@ function PastCycleRow({ c, gn, cycleIdx, saveCycle }) {
   );
 }
 
-function AdminV({ st, ladder, startCyc, completeCyc, endEarlyCyc, undoCyc, resetAll, addP, rmP, ffM, gn, save, togCI }) {
+function AdminV({ st, ladder, previewCyc, confirmCyc, completeCyc, endEarlyCyc, undoCyc, resetAll, addP, rmP, ffM, gn, save, togCI }) {
   const [pin, setPin] = useState(""); const [ok, setOk] = useState(false); const [err, setErr] = useState(false);
   const [cc, setCc] = useState(false); const [cr, setCr] = useState(false); const [cu, setCu] = useState(false); const [randomRound, setRandomRound] = useState(false);
   const [nm, setNm] = useState(""); const [rmId, setRmId] = useState(null); const [search, setSearch] = useState("");
   const [showPlayers, setShowPlayers] = useState(true);
   const [showCheckedIn, setShowCheckedIn] = useState(false);
   const [showPinChange, setShowPinChange] = useState(false); const [newPinA, setNewPinA] = useState(""); const [newPinB, setNewPinB] = useState(""); const [pinErr, setPinErr] = useState("");
+  // Box preview state (admin adjusts suggested boxes before confirming round start)
+  const [showBoxPreview, setShowBoxPreview] = useState(false);
+  const [previewBoxes, setPreviewBoxes] = useState([]);
+  const [suggestedBoxes, setSuggestedBoxes] = useState([]);
+  const [previewPast, setPreviewPast] = useState(null);
+  const [previewRandomize, setPreviewRandomize] = useState(false);
+  const [swapSrc, setSwapSrc] = useState(null); // { boxIdx, playerId }
+  const [manuallyMoved, setManuallyMoved] = useState(new Set());
   const daysInCycle = st.cycleStart ? dd(nw(), st.cycleStart) : 0;
   const pendingMatches = [
     ...(st.boxMatches || []).filter(m => !m.completed).map(m => ({ ...m, matchType: "Box", label: m.boxName || "Box" })),
@@ -1305,6 +1320,54 @@ function AdminV({ st, ladder, startCyc, completeCyc, endEarlyCyc, undoCyc, reset
     <div style={gc}><h4 style={{ fontSize: 15, fontWeight: 600, color: P.white, marginBottom: 10, fontFamily: "Georgia,serif" }}>Stats</h4>
       <div style={{ display: "flex", gap: 8 }}>{[[st.players.length, "Players"], [st.cycleNumber, "Cycles"], [tot, "Matches"]].map(([n, l]) => (<div key={l} style={{ flex: 1, background: "rgba(0,20,40,.5)", borderRadius: 10, padding: "14px 6px", textAlign: "center", border: "1px solid " + P.gb }}><div style={{ fontSize: 26, fontWeight: 300, color: P.orange, fontFamily: "Georgia,serif" }}>{n}</div><div style={{ fontSize: 9, color: P.dim, letterSpacing: 2, textTransform: "uppercase", marginTop: 2 }}>{l}</div></div>))}</div></div>
   </div>);
+
+  // Box preview overlay — shown when admin previews/adjusts boxes before starting a round
+  const handleSwap = (boxIdx, playerId) => {
+    if (!swapSrc) { setSwapSrc({ boxIdx, playerId }); return; }
+    if (swapSrc.playerId === playerId) { setSwapSrc(null); return; }
+    if (swapSrc.boxIdx === boxIdx) { setSwapSrc({ boxIdx, playerId }); return; }
+    const nb = previewBoxes.map((b, bi) => {
+      if (bi === swapSrc.boxIdx) return { ...b, players: b.players.map(p => p === swapSrc.playerId ? playerId : p) };
+      if (bi === boxIdx) return { ...b, players: b.players.map(p => p === playerId ? swapSrc.playerId : p) };
+      return b;
+    });
+    const nm = new Set(manuallyMoved); nm.add(swapSrc.playerId); nm.add(playerId);
+    setPreviewBoxes(nb); setManuallyMoved(nm); setSwapSrc(null);
+  };
+  if (showBoxPreview) return (
+    <div style={{ paddingTop: 16, paddingBottom: "max(16px,env(safe-area-inset-bottom))" }}>
+      <Tt>Round {st.cycleNumber + 1} — Box Preview</Tt>
+      {swapSrc && (
+        <div style={{ background: "rgba(21,152,203,.12)", border: "1px solid rgba(21,152,203,.3)", borderRadius: 12, padding: "8px 14px", marginBottom: 10, marginLeft: 16, marginRight: 16 }}>
+          <p style={{ fontSize: 12, color: P.blue, margin: 0 }}>Tap a player in a <strong>different box</strong> to swap with <strong>{gn(swapSrc.playerId)}</strong></p>
+        </div>
+      )}
+      {previewBoxes.map((box, bi) => (
+        <div key={bi} style={{ ...gc, marginLeft: 16, marginRight: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <h4 style={{ fontSize: 11, fontWeight: 700, color: P.blue, letterSpacing: 2, textTransform: "uppercase", margin: 0 }}>{box.name}</h4>
+            <span style={{ fontSize: 10, color: P.dim }}>{box.players.length} players</span>
+          </div>
+          {box.players.map(pid => {
+            const isSrc = swapSrc && swapSrc.playerId === pid;
+            const isMoved = manuallyMoved.has(pid);
+            return (
+              <div key={pid} onClick={() => handleSwap(bi, pid)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 10px", borderRadius: 10, marginBottom: 5, background: isSrc ? "rgba(21,152,203,.18)" : "rgba(0,20,40,.45)", border: isSrc ? "1px solid " + P.blue : "1px solid rgba(255,255,255,.07)", cursor: "pointer", transition: "background .15s, border .15s" }}>
+                <span style={{ flex: 1, fontSize: 13, color: P.off, fontWeight: isSrc ? 700 : 400 }}>{gn(pid)}</span>
+                {isMoved && <span style={{ fontSize: 9, color: P.orange, fontWeight: 700, background: "rgba(241,138,0,.15)", border: "1px solid rgba(241,138,0,.3)", borderRadius: 4, padding: "1px 5px" }}>MOVED</span>}
+                <span style={{ fontSize: 13, color: isSrc ? P.blue : P.dim }}>⇄</span>
+              </div>
+            );
+          })}
+        </div>
+      ))}
+      <div style={{ padding: "0 16px", display: "flex", flexDirection: "column", gap: 4 }}>
+        <button onClick={() => { confirmCyc(previewBoxes, previewPast, previewRandomize, manuallyMoved); setShowBoxPreview(false); setSwapSrc(null); setManuallyMoved(new Set()); }} style={{ ...bpS, marginTop: 0, background: "linear-gradient(135deg," + P.amber + ",#F59E0B)", color: P.navy }}>Start Round {st.cycleNumber + 1}</button>
+        <button onClick={() => { setPreviewBoxes(suggestedBoxes.map(b => ({ ...b, players: [...b.players] }))); setManuallyMoved(new Set()); setSwapSrc(null); }} style={{ ...bcS, color: P.blue }}>Reset to Suggested</button>
+        <button onClick={() => { setShowBoxPreview(false); setSwapSrc(null); setManuallyMoved(new Set()); }} style={bcS}>Cancel</button>
+      </div>
+    </div>
+  );
 
   return (<div style={{ paddingTop: 16 }}><Tt>Admin <span style={{ fontSize: 11, color: P.ok }}>{"\ud83d\udd13"}</span></Tt>
     <div style={gc}>
@@ -1408,19 +1471,26 @@ function AdminV({ st, ladder, startCyc, completeCyc, endEarlyCyc, undoCyc, reset
 
             if (noRound) {
               if (st.checkedIn.length < 4) return <p style={{ fontSize: 11, color: P.bad }}>Need 4+ signed up to start ({st.checkedIn.length} so far)</p>;
-              return cc ? (
-                <div>
-                  {randomRound && <p style={{ fontSize: 11, color: P.amber, marginBottom: 6 }}>Boxes will be randomized — rank ignored</p>}
-                  <button onClick={() => { startCyc(randomRound); setCc(false); setRandomRound(false); }} style={{ ...bpS, background: "linear-gradient(135deg," + P.amber + ",#F59E0B)", color: P.navy }}>Start Round {st.cycleNumber + 1}</button>
-                  <button onClick={() => setCc(false)} style={bcS}>Cancel</button>
-                </div>
-              ) : (
+              const openPreview = () => {
+                const data = previewCyc(randomRound);
+                if (!data) return;
+                setPreviewBoxes(data.suggestedBoxes.map(b => ({ ...b, players: [...b.players] })));
+                setSuggestedBoxes(data.suggestedBoxes.map(b => ({ ...b, players: [...b.players] })));
+                setPreviewPast(data.past);
+                setPreviewRandomize(data.randomize);
+                setManuallyMoved(new Set());
+                setSwapSrc(null);
+                setShowBoxPreview(true);
+                setCc(false);
+                setRandomRound(false);
+              };
+              return (
                 <div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
                     <input type="checkbox" id="rndRound" checked={randomRound} onChange={e => setRandomRound(e.target.checked)} style={{ width: 16, height: 16, accentColor: P.orange, cursor: "pointer" }} />
                     <label htmlFor="rndRound" style={{ fontSize: 12, color: P.grey, cursor: "pointer" }}>Randomize boxes <span style={{ color: P.dim, fontSize: 10 }}>(ignore seeding)</span></label>
                   </div>
-                  <button onClick={() => setCc(true)} style={{ ...bpS, background: "linear-gradient(135deg," + P.amber + ",#F59E0B)", color: P.navy }}>Start Round {st.cycleNumber + 1}</button>
+                  <button onClick={openPreview} style={{ ...bpS, background: "linear-gradient(135deg," + P.amber + ",#F59E0B)", color: P.navy }}>Preview Boxes for Round {st.cycleNumber + 1}</button>
                 </div>
               );
             }
