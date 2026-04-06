@@ -247,6 +247,15 @@ function App() {
     save(withLog({ ...st, pastCycles: past, boxes: [], boxMatches: [], wildCards: [], openChallenges: [] }, "CYCLE_COMPLETED", "Round " + st.cycleNumber));
     flash("Round " + st.cycleNumber + " complete!");
   };
+  const endEarlyCyc = () => {
+    const bon = [];
+    const afBM = (st.boxMatches || []).map(m => !m.completed ? { ...m, score1: 0, score2: 0, completed: true, completedAt: nw(), forfeit: true, autoForfeit: true } : m);
+    const afWC = (st.wildCards || []).map(m => !m.completed ? { ...m, score1: 0, score2: 0, completed: true, completedAt: nw(), forfeit: true, autoForfeit: true } : m);
+    if (st.boxes) st.boxes.forEach((box, bi) => { const bm = afBM.filter(m => m.box === bi); if (bm.length > 0 && bm.every(m => m.completed)) { const bs = boxSt(box.players, bm); if (bs[0]) bon.push({ id: bs[0].id, pts: 3 }); if (bs[1]) bon.push({ id: bs[1].id, pts: 1 }); } });
+    const past = [...st.pastCycles, { cycle: st.cycleNumber, boxMatches: afBM, wildCards: afWC, openChallenges: st.openChallenges || [], boxes: st.boxes || [], bonuses: [...bon], startedAt: st.cycleStart, randomized: st.cycleRandomized || false }];
+    save(withLog({ ...st, pastCycles: past, boxes: [], boxMatches: [], wildCards: [], openChallenges: [] }, "CYCLE_ENDED_EARLY", "Round " + st.cycleNumber));
+    flash("Round " + st.cycleNumber + " ended.");
+  };
   const startCyc = (randomize = false) => {
     if (st.checkedIn.length < 4) { flash("Need 4+"); return; }
     let past = st.pastCycles;
@@ -321,7 +330,7 @@ function App() {
         {view === "challenge" && <ChallengeV players={st.players} newOC={newOC} />}
         {view === "checkin" && <CheckInV st={st} ladder={ladder} togCI={togCI} autoOpen={checkInFocus} onAutoOpenDone={() => setCheckInFocus(false)} />}
         {view === "rules" && <RulesV />}
-        {view === "admin" && <AdminV st={st} ladder={ladder} startCyc={startCyc} completeCyc={completeCyc} undoCyc={undoCyc} resetAll={resetAll} addP={addP} rmP={rmP} ffM={ffM} gn={gn} save={save} togCI={togCI} />}
+        {view === "admin" && <AdminV st={st} ladder={ladder} startCyc={startCyc} completeCyc={completeCyc} endEarlyCyc={endEarlyCyc} undoCyc={undoCyc} resetAll={resetAll} addP={addP} rmP={rmP} ffM={ffM} gn={gn} save={save} togCI={togCI} />}
       </main>
       <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 10, padding: "0 14px", paddingBottom: "max(10px, env(safe-area-inset-bottom))" }}>
         <nav style={{ display: "flex", justifyContent: "space-around", alignItems: "center", padding: "6px 4px", background: "rgba(255,255,255,.08)", backdropFilter: "blur(40px) saturate(200%)", WebkitBackdropFilter: "blur(40px) saturate(200%)", borderRadius: 28, border: "1px solid rgba(255,255,255,.18)", borderTop: "1px solid rgba(255,255,255,.28)", boxShadow: "0 8px 40px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.18)", position: "relative", marginBottom: 8, overflow: "hidden" }}>
@@ -1247,7 +1256,7 @@ function PastCycleRow({ c, gn, cycleIdx, saveCycle }) {
   );
 }
 
-function AdminV({ st, ladder, startCyc, completeCyc, undoCyc, resetAll, addP, rmP, ffM, gn, save, togCI }) {
+function AdminV({ st, ladder, startCyc, completeCyc, endEarlyCyc, undoCyc, resetAll, addP, rmP, ffM, gn, save, togCI }) {
   const [pin, setPin] = useState(""); const [ok, setOk] = useState(false); const [err, setErr] = useState(false);
   const [cc, setCc] = useState(false); const [cr, setCr] = useState(false); const [cu, setCu] = useState(false); const [randomRound, setRandomRound] = useState(false);
   const [nm, setNm] = useState(""); const [rmId, setRmId] = useState(null); const [search, setSearch] = useState("");
@@ -1300,12 +1309,14 @@ function AdminV({ st, ladder, startCyc, completeCyc, undoCyc, resetAll, addP, rm
     </div>
 
     {(() => {
-      const allDone = st.cycleNumber > 0 && (st.boxes||[]).length > 0 && (st.boxMatches||[]).every(m => m.completed) && (st.wildCards||[]).every(m => m.completed);
+      const roundActive = st.cycleNumber > 0 && (st.boxes||[]).length > 0;
+      const allDone = roundActive && (st.boxMatches||[]).every(m => m.completed) && (st.wildCards||[]).every(m => m.completed);
       const cycleComplete = st.cycleNumber > 0 && (st.boxes||[]).length === 0;
+      const noRound = !st.cycleNumber || cycleComplete;
       return (
         <div style={gc}><h4 style={{ fontSize: 15, fontWeight: 600, color: P.white, marginBottom: 6, fontFamily: "Georgia,serif" }}>Rounds</h4>
           <p style={{ fontSize: 12, color: P.grey, marginBottom: 10 }}>
-            {!st.cycleNumber ? "No active round." : cycleComplete ? "Round " + st.cycleNumber + " complete. Ready for next." : "Round " + st.cycleNumber + ". " + pend + " pending. " + st.checkedIn.length + " checked in."}
+            {!st.cycleNumber ? "No active round." : cycleComplete ? "Round " + st.cycleNumber + " complete. Ready for next." : allDone ? "Round " + st.cycleNumber + " — all matches done!" : "Round " + st.cycleNumber + " · " + pend + " pending · " + st.checkedIn.length + " signed up for next"}
           </p>
           {st.checkedIn.length > 0 && (() => {
             const N = st.checkedIn.length;
@@ -1346,22 +1357,51 @@ function AdminV({ st, ladder, startCyc, completeCyc, undoCyc, resetAll, addP, rm
               </div>
             );
           })()}
-          {allDone && (
-            <div style={{ background: "rgba(52,211,153,.08)", border: "1px solid rgba(52,211,153,.25)", borderRadius: 12, padding: "10px 14px", marginBottom: 8 }}>
-              <p style={{ fontSize: 12, color: P.ok, fontWeight: 700, marginBottom: 6 }}>✓ All matches complete</p>
-              <button onClick={() => completeCyc()} style={{ ...bpS, background: "linear-gradient(135deg,#34D399,#059669)", marginTop: 0 }}>Complete Round {st.cycleNumber}</button>
-            </div>
-          )}
-          {!allDone && !cycleComplete && (
-            st.checkedIn.length < 4 ? <p style={{ fontSize: 11, color: P.bad }}>Need 4+ ({st.checkedIn.length})</p>
-            : cc ? <div>{pend > 0 && <div style={{ marginBottom: 8, background: "rgba(248,113,113,.08)", border: "1px solid rgba(248,113,113,.25)", borderRadius: 10, padding: "8px 12px" }}><p style={{ fontSize: 11, color: P.bad, fontWeight: 700, marginBottom: 4 }}>{pend} match{pend !== 1 ? "es" : ""} will auto-forfeit:</p>{pendingMatches.map(m => <p key={m.id} style={{ fontSize: 11, color: P.grey, margin: "2px 0" }}>• {gn(m.player1)} vs {gn(m.player2)} <span style={{ color: P.dim }}>({m.label})</span></p>)}</div>}{randomRound && <p style={{ fontSize: 11, color: P.amber, marginBottom: 6 }}>Boxes will be randomized — rank ignored</p>}<button onClick={() => { startCyc(randomRound); setCc(false); setRandomRound(false); }} style={bpS}>Start Round {st.cycleNumber + 1}</button><button onClick={() => setCc(false)} style={bcS}>Cancel</button></div>
-            : <div><div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}><input type="checkbox" id="rndRound" checked={randomRound} onChange={e => setRandomRound(e.target.checked)} style={{ width: 16, height: 16, accentColor: P.orange, cursor: "pointer" }} /><label htmlFor="rndRound" style={{ fontSize: 12, color: P.grey, cursor: "pointer" }}>Randomize boxes <span style={{ color: P.dim, fontSize: 10 }}>(ignore seeding)</span></label></div><button onClick={() => setCc(true)} style={bpS}>Start Round {st.cycleNumber + 1}</button></div>
-          )}
-          {cycleComplete && (
-            st.checkedIn.length < 4 ? <p style={{ fontSize: 11, color: P.bad }}>Need 4+ to start ({st.checkedIn.length} checked in)</p>
-            : cc ? <div>{randomRound && <p style={{ fontSize: 11, color: P.amber, marginBottom: 6 }}>Boxes will be randomized — rank ignored</p>}<button onClick={() => { startCyc(randomRound); setCc(false); setRandomRound(false); }} style={bpS}>Start Round {st.cycleNumber + 1}</button><button onClick={() => setCc(false)} style={bcS}>Cancel</button></div>
-            : <div><div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}><input type="checkbox" id="rndRound2" checked={randomRound} onChange={e => setRandomRound(e.target.checked)} style={{ width: 16, height: 16, accentColor: P.orange, cursor: "pointer" }} /><label htmlFor="rndRound2" style={{ fontSize: 12, color: P.grey, cursor: "pointer" }}>Randomize boxes <span style={{ color: P.dim, fontSize: 10 }}>(ignore seeding)</span></label></div><button onClick={() => setCc(true)} style={bpS}>Start Round {st.cycleNumber + 1}</button></div>
-          )}
+          {(() => {
+            if (roundActive && !allDone) return cc ? (
+              <div>
+                <div style={{ background: "rgba(248,113,113,.08)", border: "1px solid rgba(248,113,113,.25)", borderRadius: 10, padding: "10px 12px", marginBottom: 10 }}>
+                  <p style={{ fontSize: 11, color: P.bad, fontWeight: 700, marginBottom: 6 }}>⚠ {pend} match{pend !== 1 ? "es" : ""} will be marked not played:</p>
+                  {pendingMatches.map(m => <p key={m.id} style={{ fontSize: 11, color: P.grey, margin: "2px 0" }}>• {gn(m.player1)} vs {gn(m.player2)} <span style={{ color: P.dim }}>({m.label})</span></p>)}
+                </div>
+                <button onClick={() => { endEarlyCyc(); setCc(false); }} style={{ ...bpS, background: "linear-gradient(135deg,#F87171,#EF4444)", marginTop: 0 }}>Confirm — End Round {st.cycleNumber}</button>
+                <button onClick={() => setCc(false)} style={bcS}>Cancel</button>
+              </div>
+            ) : <button onClick={() => setCc(true)} style={{ ...bpS, background: "linear-gradient(135deg," + P.orange + ",#F87171)" }}>End Round {st.cycleNumber} Early</button>;
+
+            if (roundActive && allDone) return cc ? (
+              <div>
+                <p style={{ fontSize: 11, color: P.ok, marginBottom: 8 }}>✓ All matches done — archive Round {st.cycleNumber}?</p>
+                <button onClick={() => { completeCyc(); setCc(false); }} style={{ ...bpS, background: "linear-gradient(135deg,#34D399,#059669)", marginTop: 0 }}>Confirm — Complete Round {st.cycleNumber}</button>
+                <button onClick={() => setCc(false)} style={bcS}>Cancel</button>
+              </div>
+            ) : (
+              <div style={{ background: "rgba(52,211,153,.08)", border: "1px solid rgba(52,211,153,.25)", borderRadius: 12, padding: "10px 14px" }}>
+                <p style={{ fontSize: 12, color: P.ok, fontWeight: 700, marginBottom: 8 }}>✓ All matches complete</p>
+                <button onClick={() => setCc(true)} style={{ ...bpS, background: "linear-gradient(135deg,#34D399,#059669)", marginTop: 0 }}>Complete Round {st.cycleNumber}</button>
+              </div>
+            );
+
+            if (noRound) {
+              if (st.checkedIn.length < 4) return <p style={{ fontSize: 11, color: P.bad }}>Need 4+ signed up to start ({st.checkedIn.length} so far)</p>;
+              return cc ? (
+                <div>
+                  {randomRound && <p style={{ fontSize: 11, color: P.amber, marginBottom: 6 }}>Boxes will be randomized — rank ignored</p>}
+                  <button onClick={() => { startCyc(randomRound); setCc(false); setRandomRound(false); }} style={{ ...bpS, background: "linear-gradient(135deg," + P.amber + ",#F59E0B)", color: P.navy }}>Start Round {st.cycleNumber + 1}</button>
+                  <button onClick={() => setCc(false)} style={bcS}>Cancel</button>
+                </div>
+              ) : (
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                    <input type="checkbox" id="rndRound" checked={randomRound} onChange={e => setRandomRound(e.target.checked)} style={{ width: 16, height: 16, accentColor: P.orange, cursor: "pointer" }} />
+                    <label htmlFor="rndRound" style={{ fontSize: 12, color: P.grey, cursor: "pointer" }}>Randomize boxes <span style={{ color: P.dim, fontSize: 10 }}>(ignore seeding)</span></label>
+                  </div>
+                  <button onClick={() => setCc(true)} style={{ ...bpS, background: "linear-gradient(135deg," + P.amber + ",#F59E0B)", color: P.navy }}>Start Round {st.cycleNumber + 1}</button>
+                </div>
+              );
+            }
+            return null;
+          })()}
         </div>
       );
     })()}
