@@ -316,7 +316,7 @@ function App() {
       )}
       <main style={{ maxWidth: 600, margin: "0 auto", padding: "0 14px 110px", animation: "fadeIn .3s", position: "relative", zIndex: 1 }}>
         {view === "home" && <Home st={st} ladder={activeLad} gn={gn} ini={ini} cd={cd} onJoin={() => { setView("checkin"); setNavIdx(4); setCheckInFocus(true); }} />}
-        {view === "boxes" && <BoxesV st={st} gn={gn} ini={ini} />}
+        {view === "boxes" && <BoxesV st={st} gn={gn} ini={ini} logR={logR} ffM={ffM} />}
         {view === "matches" && <MatchesV st={st} gn={gn} logR={logR} ffM={ffM} />}
         {view === "challenge" && <ChallengeV players={st.players} newOC={newOC} />}
         {view === "checkin" && <CheckInV st={st} ladder={ladder} togCI={togCI} autoOpen={checkInFocus} onAutoOpenDone={() => setCheckInFocus(false)} />}
@@ -397,6 +397,19 @@ function Home({ st, ladder, gn, ini, cd, onJoin }) {
   const totalDone = (st.boxMatches || []).filter(m => m.completed && !m.forfeit).length + (st.wildCards || []).filter(m => m.completed && !m.forfeit).length;
   const totalPend = (st.boxMatches || []).filter(m => !m.completed).length + (st.wildCards || []).filter(m => !m.completed).length;
 
+  const historyRows = [...st.pastCycles].reverse().map(c => {
+    const cChamps = (c.boxes || []).map((box, bi) => { const bm = (c.boxMatches || []).filter(m => m.box === bi); const bs = boxSt(box.players, bm); return bs[0] ? { box: box.name, name: gn(bs[0].id) } : null; }).filter(Boolean);
+    if (!cChamps.length) return null;
+    return (
+      <div key={c.cycle} style={{ marginBottom: 10 }}>
+        <p style={{ fontSize: 9, color: c.randomized ? P.wc : P.dim, fontWeight: 700, letterSpacing: 1, marginBottom: 4 }}>{c.randomized ? "🎲 " : ""}ROUND {c.cycle} · {fmtDate(c.startedAt)}{c.randomized ? " · RANDOMIZED" : ""}</p>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {cChamps.map((w, i) => <span key={i} style={{ fontSize: 10, color: P.off, background: c.randomized ? "rgba(196,161,255,.12)" : "rgba(0,48,82,.4)", padding: "3px 8px", borderRadius: 6 }}>{c.randomized ? "🎱" : "\ud83e\udd47"} {w.box}: {w.name}</span>)}
+        </div>
+      </div>
+    );
+  });
+
   return (
     <div>
       <header style={{ textAlign: "center", padding: "20px 0 12px" }}>
@@ -437,38 +450,44 @@ function Home({ st, ladder, gn, ini, cd, onJoin }) {
 
       {/* Last Round Champions */}
       {lastChamps.length > 0 && (
-        <div style={{ ...gc, padding: "12px 16px", background: "linear-gradient(135deg, rgba(241,138,0,.12), rgba(21,152,203,.08))", borderColor: "rgba(241,138,0,.3)" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <p style={{ fontSize: 9, color: lastCyc.randomized ? P.wc : P.orange, letterSpacing: 3, fontWeight: 700 }}>{lastCyc.randomized ? "🎲 " : ""}ROUND {lastCyc.cycle} {lastCyc.randomized ? "BOX WINNERS" : "CHAMPIONS"}</p>
-            {st.pastCycles.length > 1 && (
-              <button onClick={() => setShowChampHistory(v => !v)} style={{ fontSize: 9, fontWeight: 700, padding: "3px 10px", borderRadius: 10, background: showChampHistory ? "rgba(241,138,0,.2)" : "transparent", border: "1px solid rgba(241,138,0,.4)", color: P.amber, cursor: "pointer" }}>
-                {"\ud83c\udfc6"} History {showChampHistory ? "▲" : "▼"}
-              </button>
-            )}
+        lastCyc.randomized ? (
+          <div style={{ ...gc, padding: "12px 16px", background: "linear-gradient(135deg, rgba(196,161,255,.1), rgba(21,152,203,.08))", borderColor: "rgba(196,161,255,.3)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+              <p style={{ fontSize: 9, color: P.wc, letterSpacing: 3, fontWeight: 700 }}>🎲 ROUND {lastCyc.cycle} · RANDOMIZED</p>
+              {st.pastCycles.length > 1 && (
+                <button onClick={() => setShowChampHistory(v => !v)} style={{ fontSize: 9, fontWeight: 700, padding: "3px 10px", borderRadius: 10, background: showChampHistory ? "rgba(196,161,255,.2)" : "transparent", border: "1px solid rgba(196,161,255,.4)", color: P.wc, cursor: "pointer" }}>
+                  🎲 History {showChampHistory ? "▲" : "▼"}
+                </button>
+              )}
+            </div>
+            <p style={{ fontSize: 10, color: P.dim, marginBottom: 10 }}>Boxes were randomly assigned — all winners equal</p>
+            {lastChamps.map((w, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 0", borderBottom: i < lastChamps.length - 1 ? "1px solid rgba(196,161,255,.08)" : "none" }}>
+                <span style={{ fontSize: 9, fontWeight: 700, color: P.wc, width: 60 }}>{w.box}</span>
+                <span style={{ flex: 1, fontSize: 13, color: P.white, fontWeight: 600, fontFamily: "Georgia,serif" }}>🎱 {w.name}</span>
+              </div>
+            ))}
+            {showChampHistory && <div style={{ marginTop: 12, borderTop: "1px solid rgba(196,161,255,.15)", paddingTop: 10 }}>{historyRows}</div>}
           </div>
-          {lastChamps.map((w, i) => (
-            <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 0", borderBottom: i < lastChamps.length - 1 ? "1px solid rgba(21,152,203,.08)" : "none" }}>
-              <span style={{ fontSize: 9, fontWeight: 700, color: lastCyc.randomized ? P.wc : (w.isSwing ? P.blue : P.orange), width: 60 }}>{w.box}</span>
-              <span style={{ flex: 1, fontSize: 13, color: P.white, fontWeight: 600, fontFamily: "Georgia,serif" }}>{lastCyc.randomized ? "🎱" : "\ud83e\udd47"} {w.name}</span>
+        ) : (
+          <div style={{ ...gc, padding: "12px 16px", background: "linear-gradient(135deg, rgba(241,138,0,.12), rgba(21,152,203,.08))", borderColor: "rgba(241,138,0,.3)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <p style={{ fontSize: 9, color: P.orange, letterSpacing: 3, fontWeight: 700 }}>ROUND {lastCyc.cycle} CHAMPIONS</p>
+              {st.pastCycles.length > 1 && (
+                <button onClick={() => setShowChampHistory(v => !v)} style={{ fontSize: 9, fontWeight: 700, padding: "3px 10px", borderRadius: 10, background: showChampHistory ? "rgba(241,138,0,.2)" : "transparent", border: "1px solid rgba(241,138,0,.4)", color: P.amber, cursor: "pointer" }}>
+                  {"\ud83c\udfc6"} History {showChampHistory ? "▲" : "▼"}
+                </button>
+              )}
             </div>
-          ))}
-          {showChampHistory && (
-            <div style={{ marginTop: 12, borderTop: "1px solid rgba(21,152,203,.12)", paddingTop: 10 }}>
-              {[...st.pastCycles].reverse().map(c => {
-                const cChamps = (c.boxes || []).map((box, bi) => { const bm = (c.boxMatches || []).filter(m => m.box === bi); const bs = boxSt(box.players, bm); return bs[0] ? { box: box.name, name: gn(bs[0].id) } : null; }).filter(Boolean);
-                if (!cChamps.length) return null;
-                return (
-                  <div key={c.cycle} style={{ marginBottom: 10 }}>
-                    <p style={{ fontSize: 9, color: c.randomized ? P.wc : P.dim, fontWeight: 700, letterSpacing: 1, marginBottom: 4 }}>{c.randomized ? "🎲 " : ""}ROUND {c.cycle} · {fmtDate(c.startedAt)}</p>
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      {cChamps.map((w, i) => <span key={i} style={{ fontSize: 10, color: P.off, background: c.randomized ? "rgba(196,161,255,.12)" : "rgba(0,48,82,.4)", padding: "3px 8px", borderRadius: 6 }}>{c.randomized ? "🎱" : "\ud83e\udd47"} {w.box}: {w.name}</span>)}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+            {lastChamps.map((w, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 0", borderBottom: i < lastChamps.length - 1 ? "1px solid rgba(21,152,203,.08)" : "none" }}>
+                <span style={{ fontSize: 9, fontWeight: 700, color: w.isSwing ? P.blue : P.orange, width: 60 }}>{w.box}</span>
+                <span style={{ flex: 1, fontSize: 13, color: P.white, fontWeight: 600, fontFamily: "Georgia,serif" }}>{"\ud83e\udd47"} {w.name}</span>
+              </div>
+            ))}
+            {showChampHistory && <div style={{ marginTop: 12, borderTop: "1px solid rgba(21,152,203,.12)", paddingTop: 10 }}>{historyRows}</div>}
+          </div>
+        )
       )}
 
       {!st.cycleNumber && <div style={{ textAlign: "center", padding: "40px 0" }}><p style={{ fontSize: 44 }}>{"\ud83c\udfb1"}</p><p style={{ color: P.grey, marginTop: 10 }}>No active round yet.</p></div>}
@@ -563,14 +582,45 @@ function Home({ st, ladder, gn, ini, cd, onJoin }) {
 }
 
 // ─── BOXES ───────────────────────────────────────────────────
-function BoxesV({ st, gn, ini }) {
+function BoxesV({ st, gn, ini, logR, ffM }) {
   const [col, setCol] = useState({});
+  const [activeMatchId, setActiveMatchId] = useState(null);
+  const [s1, setS1] = useState(2); const [s2, setS2] = useState(0);
+  const [ffConf, setFfConf] = useState(null);
+  const valid = (s1 === 2 && s2 < 2) || (s2 === 2 && s1 < 2);
+  const sub = (id, list) => { if (valid) { logR(id, s1, s2, list); setActiveMatchId(null); setS1(2); setS2(0); } };
+  const openEntry = (id) => { setActiveMatchId(id); setS1(2); setS2(0); setFfConf(null); };
+  const ScoreEntry = ({ m, list }) => (
+    <div style={{ background: "rgba(0,20,40,.5)", borderRadius: 10, padding: "10px 12px", marginTop: 8, border: "1px solid rgba(21,152,203,.25)" }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+        {[m.player1, m.player2].map((pid, pi) => {
+          const cur = pi === 0 ? s1 : s2, set = pi === 0 ? setS1 : setS2, ov = pi === 0 ? s2 : s1, so = pi === 0 ? setS2 : setS1;
+          return (
+            <div key={pi} style={{ flex: 1, textAlign: "center" }}>
+              <p style={{ fontSize: 11, color: P.grey, marginBottom: 6 }}>{gn(pid)}</p>
+              <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
+                {[0, 1, 2].map(v => <button key={v} onClick={() => { set(v); if (v === 2 && ov === 2) so(1); }} style={{ width: 36, height: 36, borderRadius: 8, border: "none", cursor: "pointer", fontSize: 14, fontWeight: 700, background: cur === v ? "linear-gradient(135deg," + P.orange + "," + P.amber + ")" : "rgba(255,255,255,.08)", color: cur === v ? P.navy : P.off }}>{v}</button>)}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ display: "flex", gap: 6 }}>
+        <button onClick={() => sub(m.id, list)} disabled={!valid} style={{ flex: 1, padding: "8px 0", background: valid ? "linear-gradient(135deg," + P.orange + "," + P.amber + ")" : "rgba(255,255,255,.08)", border: "none", borderRadius: 8, color: valid ? P.navy : P.dim, fontWeight: 700, fontSize: 12, cursor: valid ? "pointer" : "default" }}>Confirm</button>
+        <button onClick={() => setActiveMatchId(null)} style={{ padding: "8px 14px", background: "transparent", border: "1px solid " + P.dim, borderRadius: 8, color: P.dim, fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Cancel</button>
+        {ffConf !== m.id
+          ? <button onClick={() => setFfConf(m.id)} style={{ padding: "8px 14px", background: "transparent", border: "1px solid rgba(248,113,113,.4)", borderRadius: 8, color: P.bad, fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Not played</button>
+          : <button onClick={() => { ffM(m.id, list); setActiveMatchId(null); setFfConf(null); }} style={{ padding: "8px 14px", background: P.bad, border: "none", borderRadius: 8, color: "#fff", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Confirm</button>}
+      </div>
+    </div>
+  );
   if (!st.boxes || !st.boxes.length) return <div style={{ textAlign: "center", padding: 50 }}><p style={{ fontSize: 44 }}>{"\ud83d\udcca"}</p><p style={{ color: P.grey }}>No active round.</p></div>;
-  const getS = (bm, p1, p2) => { const m = bm.find(m => (m.player1 === p1 && m.player2 === p2) || (m.player1 === p2 && m.player2 === p1)); if (!m) return null; if (!m.completed) return { pending: true }; return { s1: m.player1 === p1 ? m.score1 : m.score2, s2: m.player1 === p1 ? m.score2 : m.score1 }; };
+  const getS = (bm, p1, p2) => { const m = bm.find(m => (m.player1 === p1 && m.player2 === p2) || (m.player1 === p2 && m.player2 === p1)); if (!m) return null; if (!m.completed) return { pending: true, id: m.id }; return { s1: m.player1 === p1 ? m.score1 : m.score2, s2: m.player1 === p1 ? m.score2 : m.score1 }; };
   const togCol = (k) => setCol(c => ({ ...c, [k]: !c[k] }));
   return (
     <div style={{ paddingTop: 16 }}><Tt>Boxes — Round {st.cycleNumber}</Tt>
       {st.boxes.map((box, bi) => { const bm = st.boxMatches.filter(m => m.box === bi); const bs = boxSt(box.players, bm); const pids = bs.map(s => s.id); const done = bm.length > 0 && bm.every(m => m.completed); const isCol = col["box_" + bi];
+        const activeM = activeMatchId ? (st.boxMatches || []).find(m => m.id === activeMatchId && m.box === bi) : null;
         return (
           <div key={bi} style={{ marginBottom: 16 }}>
             <div onClick={() => togCol("box_" + bi)} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, cursor: "pointer", userSelect: "none" }}>
@@ -581,8 +631,10 @@ function BoxesV({ st, gn, ini }) {
             {!isCol && <div style={{ ...gc, padding: 0, overflow: "hidden" }}><div style={{ overflowX: "auto" }}><table style={{ borderCollapse: "collapse", width: "100%", minWidth: pids.length * 50 + 130 }}>
               <thead><tr><th style={{ ...gth, textAlign: "left", minWidth: 80 }}>Player</th><th style={{ ...gth, width: 36 }}>Pts</th>{pids.map(id => <th key={id} style={{ ...gth, width: 46 }}>{ini(id)}</th>)}</tr></thead>
               <tbody>{pids.map((pid, ri) => (<tr key={pid}><td style={{ ...gtd, textAlign: "left", fontWeight: 600, fontSize: 12 }}>{gn(pid)}</td><td style={{ ...gtd, fontWeight: 700, color: P.orange }}>{bs[ri] ? bs[ri].pts : 0}</td>
-                {pids.map(oid => { if (pid === oid) return <td key={oid} style={{ ...gtd, background: "rgba(0,48,82,.4)" }} />; const sc = getS(bm, pid, oid); if (!sc) return <td key={oid} style={{ ...gtd, color: P.dim }}>{"—"}</td>; if (sc.pending) return <td key={oid} style={{ ...gtd, background: "rgba(241,138,0,.12)" }}><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: P.orange, animation: "pulse 1.8s infinite" }} /></td>; if (sc.s1 === 0 && sc.s2 === 0) return <td key={oid} style={{ ...gtd, color: P.dim, fontSize: 10, fontStyle: "italic" }}>FF</td>; const w = sc.s1 > sc.s2; return <td key={oid} style={{ ...gtd, fontWeight: 700, color: w ? P.ok : P.bad, background: w ? "rgba(52,211,153,.08)" : "rgba(248,113,113,.06)" }}>{sc.s1}-{sc.s2}</td>; })}
-              </tr>))}</tbody></table></div></div>}
+                {pids.map(oid => { if (pid === oid) return <td key={oid} style={{ ...gtd, background: "rgba(0,48,82,.4)" }} />; const sc = getS(bm, pid, oid); if (!sc) return <td key={oid} style={{ ...gtd, color: P.dim }}>{"—"}</td>; if (sc.pending) return <td key={oid} onClick={() => openEntry(sc.id)} style={{ ...gtd, background: activeMatchId === sc.id ? "rgba(241,138,0,.3)" : "rgba(241,138,0,.12)", cursor: "pointer" }}><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: P.orange, animation: "pulse 1.8s infinite" }} /></td>; if (sc.s1 === 0 && sc.s2 === 0) return <td key={oid} style={{ ...gtd, color: P.dim, fontSize: 10, fontStyle: "italic" }}>FF</td>; const w = sc.s1 > sc.s2; return <td key={oid} style={{ ...gtd, fontWeight: 700, color: w ? P.ok : P.bad, background: w ? "rgba(52,211,153,.08)" : "rgba(248,113,113,.06)" }}>{sc.s1}-{sc.s2}</td>; })}
+              </tr>))}</tbody></table></div>
+              {activeM && <div style={{ padding: "0 8px 8px" }}><ScoreEntry m={activeM} list="boxMatches" /></div>}
+            </div>}
             {!isCol && done && <div style={{ display: "flex", gap: 12, marginTop: 6 }}><span style={{ fontSize: 10, color: P.orange }}>{"\ud83e\udd47"} {gn(bs[0] ? bs[0].id : "")} (+3)</span>{bs[1] && <span style={{ fontSize: 10, color: P.grey }}>{"\ud83e\udd48"} {gn(bs[1].id)} (+1)</span>}</div>}
           </div>); })}
       {st.wildCards && st.wildCards.length > 0 && (
@@ -591,7 +643,21 @@ function BoxesV({ st, gn, ini }) {
             <Sub style={{ margin: 0 }}>Wild Card Matches</Sub>
             <span style={{ marginLeft: "auto", fontSize: 10, color: P.dim }}>{col["wc"] ? "▶" : "▼"}</span>
           </div>
-          {!col["wc"] && <div style={{ ...gc, padding: 0, overflow: "hidden" }}>{st.wildCards.map(m => (<div key={m.id} style={{ display: "flex", alignItems: "center", padding: "9px 12px", borderBottom: "1px solid rgba(21,152,203,.06)" }}><span style={{ flex: 1, fontSize: 13, fontWeight: 600, textAlign: "right", paddingRight: 8 }}>{gn(m.player1)}</span>{m.completed ? <span style={{ fontSize: 15, fontWeight: 700, color: P.orange, width: 50, textAlign: "center" }}>{m.score1}-{m.score2}</span> : <span style={{ fontSize: 9, color: P.dim, width: 50, textAlign: "center", animation: "pulse 2s infinite" }}>PENDING</span>}<span style={{ flex: 1, fontSize: 13, fontWeight: 600, paddingLeft: 8 }}>{gn(m.player2)}</span></div>))}</div>}
+          {!col["wc"] && <div style={{ ...gc, padding: 0, overflow: "hidden" }}>
+            {st.wildCards.map(m => {
+              const activeWC = activeMatchId === m.id;
+              return (
+                <div key={m.id}>
+                  <div style={{ display: "flex", alignItems: "center", padding: "9px 12px", borderBottom: "1px solid rgba(21,152,203,.06)" }}>
+                    <span style={{ flex: 1, fontSize: 13, fontWeight: 600, textAlign: "right", paddingRight: 8 }}>{gn(m.player1)}</span>
+                    {m.completed ? <span style={{ fontSize: 15, fontWeight: 700, color: P.orange, width: 50, textAlign: "center" }}>{m.score1}-{m.score2}</span> : <span onClick={() => openEntry(m.id)} style={{ fontSize: 9, color: activeWC ? P.orange : P.dim, width: 50, textAlign: "center", animation: "pulse 2s infinite", cursor: "pointer", fontWeight: activeWC ? 700 : 400 }}>LOG</span>}
+                    <span style={{ flex: 1, fontSize: 13, fontWeight: 600, paddingLeft: 8 }}>{gn(m.player2)}</span>
+                  </div>
+                  {activeWC && <div style={{ padding: "0 8px 8px" }}><ScoreEntry m={m} list="wildCards" /></div>}
+                </div>
+              );
+            })}
+          </div>}
         </div>
       )}
     </div>
@@ -601,6 +667,7 @@ function BoxesV({ st, gn, ini }) {
 // ─── MATCHES (with H2H) ─────────────────────────────────────
 function MatchesV({ st, gn, logR, ffM }) {
   const [sc, setSc] = useState(null); const [s1, setS1] = useState(2); const [s2, setS2] = useState(0); const [ffConf, setFfConf] = useState(null);
+  const [filterPlayer, setFilterPlayer] = useState(null);
   if (!st.cycleNumber) return <div style={{ textAlign: "center", padding: 50 }}><p style={{ fontSize: 44 }}>{"\ud83d\udcc5"}</p><p style={{ color: P.grey }}>No active round.</p></div>;
   const valid = (s1 === 2 && s2 < 2) || (s2 === 2 && s1 < 2);
   const sub = (id, list) => { if (valid) { logR(id, s1, s2, list); setSc(null); setS1(2); setS2(0); } };
@@ -652,11 +719,24 @@ function MatchesV({ st, gn, logR, ffM }) {
   const bP = (st.boxMatches || []).filter(m => !m.completed), bD = (st.boxMatches || []).filter(m => m.completed);
   const wP = (st.wildCards || []).filter(m => !m.completed), wD = (st.wildCards || []).filter(m => m.completed);
   const oP = (st.openChallenges || []).filter(m => !m.completed), oD = (st.openChallenges || []).filter(m => m.completed);
+  const allPend = [...bP, ...wP, ...oP];
+  const pendPIds = [...new Set(allPend.flatMap(m => [m.player1, m.player2]))];
+  const pendPlayers = pendPIds.map(id => ({ id, name: gn(id) })).sort((a, b) => a.name.localeCompare(b.name));
+  const showM = (m) => !filterPlayer || m.player1 === filterPlayer || m.player2 === filterPlayer;
+  const fbP = bP.filter(showM), fbD = bD.filter(showM);
+  const fwP = wP.filter(showM), fwD = wD.filter(showM);
+  const foP = oP.filter(showM), foD = oD.filter(showM);
   return (<div style={{ paddingTop: 16 }}><Tt>Round {st.cycleNumber} Matches</Tt>
-    {bP.length > 0 && <div><SecHdr k="bp" label={"Box — Pending (" + bP.length + ")"} />{!col["bp"] && bP.map(m => rm(m, "boxMatches", "BOX", P.orange))}</div>}
-    {wP.length > 0 && <div><SecHdr k="wp" label={"Wild Cards — Pending (" + wP.length + ")"} />{!col["wp"] && wP.map(m => rm(m, "wildCards", "WILD CARD", P.wc))}</div>}
-    {oP.length > 0 && <div><SecHdr k="op" label={"Open — Pending (" + oP.length + ")"} />{!col["op"] && oP.map(m => rm(m, "openChallenges", "OPEN", P.blue))}</div>}
-    {(bD.length + wD.length + oD.length > 0) && <div><SecHdr k="done" label={"Completed (" + (bD.length + wD.length + oD.length) + ")"} />{!col["done"] && <div>{bD.map(m => rm(m, "boxMatches", "BOX", P.orange))}{wD.map(m => rm(m, "wildCards", "WILD CARD", P.wc))}{oD.map(m => rm(m, "openChallenges", "OPEN", P.blue))}</div>}</div>}
+    {pendPlayers.length > 0 && (
+      <select value={filterPlayer || ""} onChange={e => setFilterPlayer(e.target.value || null)} style={{ width: "100%", background: "rgba(0,20,40,.6)", border: "1px solid rgba(21,152,203,.3)", borderRadius: 10, color: filterPlayer ? P.off : P.dim, fontSize: 13, padding: "10px 14px", marginBottom: 12, appearance: "none", WebkitAppearance: "none", cursor: "pointer" }}>
+        <option value="">All pending matches</option>
+        {pendPlayers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+      </select>
+    )}
+    {fbP.length > 0 && <div><SecHdr k="bp" label={"Box — Pending (" + fbP.length + ")"} />{!col["bp"] && fbP.map(m => rm(m, "boxMatches", "BOX", P.orange))}</div>}
+    {fwP.length > 0 && <div><SecHdr k="wp" label={"Wild Cards — Pending (" + fwP.length + ")"} />{!col["wp"] && fwP.map(m => rm(m, "wildCards", "WILD CARD", P.wc))}</div>}
+    {foP.length > 0 && <div><SecHdr k="op" label={"Open — Pending (" + foP.length + ")"} />{!col["op"] && foP.map(m => rm(m, "openChallenges", "OPEN", P.blue))}</div>}
+    {(fbD.length + fwD.length + foD.length > 0) && <div><SecHdr k="done" label={"Completed (" + (fbD.length + fwD.length + foD.length) + ")"} />{!col["done"] && <div>{fbD.map(m => rm(m, "boxMatches", "BOX", P.orange))}{fwD.map(m => rm(m, "wildCards", "WILD CARD", P.wc))}{foD.map(m => rm(m, "openChallenges", "OPEN", P.blue))}</div>}</div>}
   </div>);
 }
 
