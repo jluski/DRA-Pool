@@ -267,7 +267,31 @@ function App() {
       past = [...st.pastCycles, { cycle: st.cycleNumber, boxMatches: afBM, wildCards: afWC, openChallenges: st.openChallenges, boxes: st.boxes, bonuses: [...bon], startedAt: st.cycleStart, randomized: randomize }];
     }
     const nl = calcLad(st.players, { ...st, pastCycles: past, boxMatches: [], wildCards: [], openChallenges: [], boxes: [] });
-    const boxes = buildBoxes(st.checkedIn, nl, randomize); const bm = genBM(boxes); const wc = genWC(boxes);
+    const lastSeeded = [...past].reverse().find(c => !c.randomized);
+    let adjustedNl = nl;
+    if (!randomize && lastSeeded) {
+      const adj = {};
+      const numBoxes = lastSeeded.boxes.length;
+      const lastSeededIds = new Set(lastSeeded.boxes.flatMap(b => b.players));
+      lastSeeded.boxes.forEach((box, bi) => {
+        const bm = (lastSeeded.boxMatches || []).filter(m => m.box === bi);
+        const hasRealMatches = bm.some(m => m.completed && !m.forfeit && !(m.score1 === 0 && m.score2 === 0));
+        if (!hasRealMatches) return;
+        const standing = boxSt(box.players, bm);
+        if (!standing.length) return;
+        if (bi > 0 && standing[0]) adj[standing[0].id] = -4;
+        if (bi < numBoxes - 1 && standing[standing.length - 1]) adj[standing[standing.length - 1].id] = +4;
+      });
+      adjustedNl = nl
+        .map((p, i) => ({
+          ...p,
+          _seed: lastSeededIds.has(p.id)
+            ? i + (adj[p.id] || 0)
+            : 9999 + i
+        }))
+        .sort((a, b) => a._seed - b._seed);
+    }
+    const boxes = buildBoxes(st.checkedIn, adjustedNl, randomize); const bm = genBM(boxes); const wc = genWC(boxes);
     const ns = { ...st, pastCycles: past, boxes, boxMatches: bm, wildCards: wc, openChallenges: [], checkedIn: [], cycleStart: nw(), cycleNumber: st.cycleNumber + 1, cycleRandomized: randomize };
     save(withLog(ns, "CYCLE_STARTED", "Round " + (st.cycleNumber + 1)));
     flash("Round " + (st.cycleNumber + 1) + " started!");
