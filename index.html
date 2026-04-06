@@ -700,11 +700,11 @@ function CheckInV({ st, ladder, togCI, autoOpen, onAutoOpenDone }) {
   // Sign Up for Next Round
   const playing = ladder.filter(s => st.checkedIn.includes(s.id));
   const notPlaying = ladder.filter(s => !st.checkedIn.includes(s.id));
-  const lastBoxes = st.boxes.length > 0 ? st.boxes : (st.pastCycles.length ? st.pastCycles[st.pastCycles.length - 1]?.boxes || [] : []);
-  const lastCycleIds = new Set(lastBoxes.flatMap(b => b.players));
-  const hasPrevCycle = lastBoxes.length > 0;
-  const newSignups = hasPrevCycle ? playing.filter(s => !lastCycleIds.has(s.id)) : [];
-  const returning = hasPrevCycle ? playing.filter(s => lastCycleIds.has(s.id)) : playing;
+  const boxWcIds = new Set([...(st.boxMatches || []), ...(st.wildCards || [])].filter(m => m.completed && !m.forfeit).flatMap(m => [m.player1, m.player2]));
+  const allCurrentIds = new Set([...(st.boxMatches || []), ...(st.wildCards || []), ...(st.openChallenges || [])].filter(m => m.completed && !m.forfeit).flatMap(m => [m.player1, m.player2]));
+  const returning = playing.filter(s => boxWcIds.has(s.id));
+  const newPlayers = playing.filter(s => !allCurrentIds.has(s.id));
+  const other = playing.filter(s => allCurrentIds.has(s.id) && !boxWcIds.has(s.id));
   const filtered = search.trim() ? notPlaying.filter(s => s.name.toLowerCase().includes(search.toLowerCase())) : notPlaying;
 
   const secBtn = (label, show, onToggle, count) => (
@@ -718,7 +718,7 @@ function CheckInV({ st, ladder, togCI, autoOpen, onAutoOpenDone }) {
 
   const playerRow = (s, action, actionLabel, actionStyle, badge) => (
     <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 4px", borderBottom: "1px solid rgba(21,152,203,.06)" }}>
-      {badge && <span style={{ fontSize: 8, fontWeight: 700, color: P.orange, background: "rgba(241,138,0,.15)", border: "1px solid rgba(241,138,0,.3)", borderRadius: 4, padding: "1px 5px", letterSpacing: 1 }}>NEW</span>}
+      {badge && <span style={{ fontSize: 8, fontWeight: 700, color: badge === "NEW" ? P.orange : P.ok, background: badge === "NEW" ? "rgba(241,138,0,.15)" : "rgba(52,211,153,.12)", border: badge === "NEW" ? "1px solid rgba(241,138,0,.3)" : "1px solid rgba(52,211,153,.35)", borderRadius: 4, padding: "1px 5px", letterSpacing: 1 }}>{badge}</span>}
       <span style={{ flex: 1, fontSize: 13 }}>{s.name}</span>
       {action && <button onClick={() => action(s.id)} style={actionStyle}>{actionLabel}</button>}
     </div>
@@ -761,8 +761,9 @@ function CheckInV({ st, ladder, togCI, autoOpen, onAutoOpenDone }) {
     {showSignUp && (
       <div style={gc}>
         {playing.length === 0 && <p style={{ fontSize: 12, color: P.dim, textAlign: "center", padding: "8px 0" }}>No one signed up yet.</p>}
-        {newSignups.map(s => playerRow(s, togCI, "Leave", leaveBtn, true))}
-        {returning.map(s => playerRow(s, togCI, "Leave", leaveBtn, false))}
+        {returning.map(s => playerRow(s, togCI, "Leave", leaveBtn, "RETURNING"))}
+        {newPlayers.map(s => playerRow(s, togCI, "Leave", leaveBtn, "NEW"))}
+        {other.map(s => playerRow(s, togCI, "Leave", leaveBtn, null))}
 
         {/* Remaining — collapsed */}
         <div ref={signupRef} onClick={() => setShowRemaining(v => !v)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 0 6px", cursor: "pointer", userSelect: "none", marginTop: 4, borderTop: "1px solid rgba(21,152,203,.08)" }}>
