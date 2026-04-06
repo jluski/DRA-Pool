@@ -87,7 +87,7 @@ function calcLad(players, st) {
   const sorted = all.filter(m => m.completed).sort((a, b) => (a.completedAt || "").localeCompare(b.completedAt || ""));
   sorted.forEach(m => {
     const a = s[m.player1], b = s[m.player2]; if (!a || !b) return;
-    if (m.forfeit || (m.score1 === 0 && m.score2 === 0 && m.type !== "open")) return;
+    if (m.forfeit || (m.score1 === 0 && m.score2 === 0)) return;
     a.mp++; b.mp++; a.rw += m.score1; a.rl += m.score2; b.rw += m.score2; b.rl += m.score1;
     if (m.completedAt) { if (m.completedAt > a.last) a.last = m.completedAt; if (m.completedAt > b.last) b.last = m.completedAt; }
     if (m.type === "open") {
@@ -237,8 +237,8 @@ function App() {
   if (!st) return <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: P.navy }}><div style={{ width: 36, height: 36, border: "2px solid " + P.mid, borderTop: "2px solid " + P.orange, borderRadius: "50%", animation: "spin .7s linear infinite" }} /><style>{"@keyframes spin{to{transform:rotate(360deg)}}"}</style></div>;
 
   const addP = (n) => { if (!n.trim() || st.players.find(p => p.name.toLowerCase() === n.trim().toLowerCase())) { flash("Invalid/duplicate"); return; } const np = { id: uid(), name: n.trim(), joinedAt: nw() }; save(withLog({ ...st, players: [...st.players, np] }, "PLAYER_ADDED", n.trim())); flash(n.trim() + " joined!"); };
-  const rmP = (id) => { const nm = (st.players.find(p => p.id === id) || {}).name || id; const ns = { ...st, players: st.players.filter(p => p.id !== id), checkedIn: st.checkedIn.filter(c => c !== id), boxMatches: (st.boxMatches || []).map(m => (m.player1 === id || m.player2 === id) && !m.completed ? { ...m, score1: 0, score2: 0, completed: true, completedAt: nw(), forfeit: true } : m), wildCards: (st.wildCards || []).map(m => (m.player1 === id || m.player2 === id) && !m.completed ? { ...m, score1: 0, score2: 0, completed: true, completedAt: nw(), forfeit: true } : m), openChallenges: (st.openChallenges || []).filter(m => m.player1 !== id && m.player2 !== id) }; save(withLog(ns, "PLAYER_REMOVED", nm)); flash("Removed"); };
-  const togCI = (id) => { const checked = st.checkedIn.includes(id); save(withLog({ ...st, checkedIn: checked ? st.checkedIn.filter(c => c !== id) : [...st.checkedIn, id] }, "CHECKIN_TOGGLED", gn(id))); };
+  const rmP = (id) => { const nm = (st.players.find(p => p.id === id) || {}).name || id; const ns = { ...st, players: st.players.filter(p => p.id !== id), checkedIn: st.checkedIn.filter(c => c !== id), boxMatches: (st.boxMatches || []).map(m => (m.player1 === id || m.player2 === id) && !m.completed ? { ...m, score1: 0, score2: 0, completed: true, completedAt: nw(), forfeit: true } : m), wildCards: (st.wildCards || []).map(m => (m.player1 === id || m.player2 === id) && !m.completed ? { ...m, score1: 0, score2: 0, completed: true, completedAt: nw(), forfeit: true } : m), openChallenges: (st.openChallenges || []).map(m => (m.player1 === id || m.player2 === id) && !m.completed ? { ...m, score1: 0, score2: 0, completed: true, completedAt: nw(), forfeit: true } : m) }; save(withLog(ns, "PLAYER_REMOVED", nm)); flash("Removed"); };
+  const togCI = (id) => { if (!st.players.some(p => p.id === id)) return; const checked = st.checkedIn.includes(id); save(withLog({ ...st, checkedIn: checked ? st.checkedIn.filter(c => c !== id) : [...st.checkedIn, id] }, "CHECKIN_TOGGLED", gn(id))); };
   const selLast = () => { if (!st.pastCycles.length) { flash("No previous round"); return; } const lastC = st.pastCycles[st.pastCycles.length - 1]; const allM = [...(lastC.boxMatches || []), ...(lastC.wildCards || []), ...(lastC.openChallenges || [])].filter(m => m.completed && !m.forfeit && !(m.score1 === 0 && m.score2 === 0)); const ids = [...new Set(allM.flatMap(m => [m.player1, m.player2]))].filter(id => st.players.some(p => p.id === id)); if (!ids.length) { flash("No previous round"); return; } save(withLog({ ...st, checkedIn: ids }, "CHECKIN_AUTO_SELECT", ids.length + " players")); flash(ids.length + " from last round!"); };
   const completeCyc = () => {
     const bon = [];
@@ -318,10 +318,11 @@ function App() {
         playerReasons[pid] = { reason: everPlayed ? "returning" : "new", fromBox: null, lastRecord: null };
       });
     }
-    return { past, randomize, suggestedBoxes: buildBoxes(st.checkedIn, adjustedNl, randomize), playerReasons };
+    return { randomize, suggestedBoxes: buildBoxes(st.checkedIn, adjustedNl, randomize), playerReasons };
   };
   // Confirm: save admin-approved (possibly adjusted) boxes to Firestore
-  const confirmCyc = (finalBoxes, past, randomize, movedIds) => {
+  const confirmCyc = (finalBoxes, randomize, movedIds) => {
+    const past = buildArchive();
     const stampedBoxes = finalBoxes.map(box => ({ ...box, manuallyPlaced: box.players.filter(id => movedIds.has(id)) }));
     const bm = genBM(stampedBoxes); const wc = genWC(stampedBoxes);
     const ns = { ...st, pastCycles: past, boxes: stampedBoxes, boxMatches: bm, wildCards: wc, openChallenges: [], checkedIn: [], cycleStart: nw(), cycleNumber: st.cycleNumber + 1, cycleRandomized: randomize };
@@ -329,7 +330,7 @@ function App() {
     flash("Round " + (st.cycleNumber + 1) + " started!");
   };
   const undoCyc = () => { if (st.cycleNumber < 1) return; const prev = st.pastCycles[st.pastCycles.length - 1]; const restore = arr => (arr || []).map(m => m.autoForfeit ? { ...m, score1: null, score2: null, completed: false, completedAt: null, forfeit: false, autoForfeit: false } : m); const base = prev ? { ...st, pastCycles: st.pastCycles.slice(0, -1), boxes: prev.boxes || [], boxMatches: restore(prev.boxMatches), wildCards: restore(prev.wildCards), openChallenges: prev.openChallenges || [], checkedIn: [], cycleStart: prev.startedAt, cycleNumber: st.cycleNumber - 1 } : { ...st, boxes: [], boxMatches: [], wildCards: [], openChallenges: [], checkedIn: [], cycleStart: null, cycleNumber: 0 }; save(withLog(base, "CYCLE_UNDONE", "Round " + st.cycleNumber)); flash("Undone!"); };
-  const logR = (id, s1, s2, list) => { const m = st[list].find(x => x.id === id); const det = m ? gn(m.player1) + " " + s1 + "-" + s2 + " " + gn(m.player2) : id; const newCI = m ? [...new Set([...st.checkedIn, m.player1, m.player2])] : st.checkedIn; save(withLog({ ...st, [list]: st[list].map(m => m.id === id ? { ...m, score1: s1, score2: s2, completed: true, completedAt: nw(), forfeit: false } : m), checkedIn: newCI }, "MATCH_RECORDED", det)); flash(m ? gn(m.player1) + " " + s1 + "–" + s2 + " " + gn(m.player2) : "Recorded!"); };
+  const logR = (id, s1, s2, list) => { const m = st[list].find(x => x.id === id); const det = m ? gn(m.player1) + " " + s1 + "-" + s2 + " " + gn(m.player2) : id; const playerIds = new Set(st.players.map(p => p.id)); const newCI = m ? [...new Set([...st.checkedIn, m.player1, m.player2])].filter(id => playerIds.has(id)) : st.checkedIn; save(withLog({ ...st, [list]: st[list].map(m => m.id === id ? { ...m, score1: s1, score2: s2, completed: true, completedAt: nw(), forfeit: false } : m), checkedIn: newCI }, "MATCH_RECORDED", det)); flash(m ? gn(m.player1) + " " + s1 + "–" + s2 + " " + gn(m.player2) : "Recorded!"); };
   const ffM = (id, list) => { const m = st[list].find(x => x.id === id); const det = m ? gn(m.player1) + " vs " + gn(m.player2) : id; save(withLog({ ...st, [list]: st[list].map(m => m.id === id ? { ...m, score1: 0, score2: 0, completed: true, completedAt: nw(), forfeit: true } : m) }, "MATCH_FORFEIT", det)); flash(m ? gn(m.player1) + " vs " + gn(m.player2) + " — not played" : "Not played"); };
   const newOC = (p1, p2) => { if (p1 === p2) { flash("Same player!"); return; } if ((st.openChallenges || []).find(m => !m.completed && ((m.player1 === p1 && m.player2 === p2) || (m.player1 === p2 && m.player2 === p1)))) { flash("Challenge already pending!"); return; } const oc = { id: uid(), type: "open", player1: p1, player2: p2, score1: null, score2: null, completed: false, completedAt: null }; save(withLog({ ...st, openChallenges: [...st.openChallenges, oc] }, "CHALLENGE_CREATED", gn(p1) + " vs " + gn(p2))); flash("Challenge created!"); };
   const resetAll = () => { save(DEF); flash("Reset!"); setView("home"); };
@@ -447,7 +448,7 @@ function Home({ st, ladder, gn, ini, cd, onJoin }) {
   // Last completed cycle champions (all box winners)
   const lastCyc = st.pastCycles && st.pastCycles.length ? st.pastCycles[st.pastCycles.length - 1] : null;
   const lastChamps = lastCyc
-    ? (lastCyc.boxes || []).map((box, bi) => { const bm = (lastCyc.boxMatches || []).filter(m => m.box === bi); const bs = boxSt(box.players, bm); return bs[0] ? { box: box.name, name: gn(bs[0].id), isSwing: box.isSwing } : null; }).filter(Boolean)
+    ? (lastCyc.boxes || []).map((box, bi) => { const bm = (lastCyc.boxMatches || []).filter(m => m.box === bi && m.completed && !m.forfeit && !(m.score1 === 0 && m.score2 === 0)); const bs = bm.length ? boxSt(box.players, bm) : []; return bs[0] ? { box: box.name, name: gn(bs[0].id), isSwing: box.isSwing } : null; }).filter(Boolean)
     : [];
 
   // Cycle progress summary
@@ -463,7 +464,7 @@ function Home({ st, ladder, gn, ini, cd, onJoin }) {
   const totalPend = (st.boxMatches || []).filter(m => !m.completed).length + (st.wildCards || []).filter(m => !m.completed).length;
 
   const historyRows = [...st.pastCycles].reverse().map(c => {
-    const cChamps = (c.boxes || []).map((box, bi) => { const bm = (c.boxMatches || []).filter(m => m.box === bi); const bs = boxSt(box.players, bm); return bs[0] ? { box: box.name, name: gn(bs[0].id) } : null; }).filter(Boolean);
+    const cChamps = (c.boxes || []).map((box, bi) => { const bm = (c.boxMatches || []).filter(m => m.box === bi && m.completed && !m.forfeit && !(m.score1 === 0 && m.score2 === 0)); const bs = bm.length ? boxSt(box.players, bm) : []; return bs[0] ? { box: box.name, name: gn(bs[0].id) } : null; }).filter(Boolean);
     if (!cChamps.length) return null;
     return (
       <div key={c.cycle} style={{ marginBottom: 10 }}>
@@ -784,18 +785,18 @@ function MatchesV({ st, gn, logR, ffM }) {
   const bP = (st.boxMatches || []).filter(m => !m.completed), bD = (st.boxMatches || []).filter(m => m.completed);
   const wP = (st.wildCards || []).filter(m => !m.completed), wD = (st.wildCards || []).filter(m => m.completed);
   const oP = (st.openChallenges || []).filter(m => !m.completed), oD = (st.openChallenges || []).filter(m => m.completed);
-  const allPend = [...bP, ...wP, ...oP];
-  const pendPIds = [...new Set(allPend.flatMap(m => [m.player1, m.player2]))];
-  const pendPlayers = pendPIds.map(id => ({ id, name: gn(id) })).sort((a, b) => a.name.localeCompare(b.name));
+  const allM = [...bP, ...bD, ...wP, ...wD, ...oP, ...oD];
+  const allMPIds = [...new Set(allM.flatMap(m => [m.player1, m.player2]))];
+  const allMPlayers = allMPIds.map(id => ({ id, name: gn(id) })).sort((a, b) => a.name.localeCompare(b.name));
   const showM = (m) => !filterPlayer || m.player1 === filterPlayer || m.player2 === filterPlayer;
   const fbP = bP.filter(showM), fbD = bD.filter(showM);
   const fwP = wP.filter(showM), fwD = wD.filter(showM);
   const foP = oP.filter(showM), foD = oD.filter(showM);
   return (<div style={{ paddingTop: 16 }}><Tt>Round {st.cycleNumber} Matches</Tt>
-    {pendPlayers.length > 0 && (
+    {allMPlayers.length > 0 && (
       <select value={filterPlayer || ""} onChange={e => setFilterPlayer(e.target.value || null)} style={{ width: "100%", background: "rgba(0,20,40,.6)", border: "1px solid rgba(21,152,203,.3)", borderRadius: 10, color: filterPlayer ? P.off : P.dim, fontSize: 13, padding: "10px 14px", marginBottom: 12, appearance: "none", WebkitAppearance: "none", cursor: "pointer" }}>
-        <option value="">All pending matches</option>
-        {pendPlayers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+        <option value="">All matches</option>
+        {allMPlayers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
       </select>
     )}
     {fbP.length > 0 && <div><SecHdr k="bp" label={"Box — Pending (" + fbP.length + ")"} />{!col["bp"] && fbP.map(m => rm(m, "boxMatches", "BOX", P.orange))}</div>}
@@ -1081,7 +1082,8 @@ function PastCycleRow({ c, gn, cycleIdx, saveCycle }) {
 
   // Champions per box
   const champions = (c.boxes || []).map((box, bi) => {
-    const bs = boxSt(box.players, (c.boxMatches || []).filter(m => m.box === bi));
+    const bm = (c.boxMatches || []).filter(m => m.box === bi && m.completed && !m.forfeit && !(m.score1 === 0 && m.score2 === 0));
+    const bs = bm.length ? boxSt(box.players, bm) : [];
     return { boxName: box.name, isSwing: box.isSwing, winner: bs[0]?.id, runner: bs[1]?.id };
   });
 
@@ -1323,7 +1325,6 @@ function AdminV({ st, ladder, previewCyc, confirmCyc, completeCyc, endEarlyCyc, 
   const [showBoxPreview, setShowBoxPreview] = useState(false);
   const [previewBoxes, setPreviewBoxes] = useState([]);
   const [suggestedBoxes, setSuggestedBoxes] = useState([]);
-  const [previewPast, setPreviewPast] = useState(null);
   const [previewRandomize, setPreviewRandomize] = useState(false);
   const [swapSrc, setSwapSrc] = useState(null); // { boxIdx, playerId }
   const [manuallyMoved, setManuallyMoved] = useState(new Set());
@@ -1415,7 +1416,7 @@ function AdminV({ st, ladder, previewCyc, confirmCyc, completeCyc, endEarlyCyc, 
         ));
       })()}
       <div style={{ padding: "0 16px", display: "flex", flexDirection: "column", gap: 4 }}>
-        <button onClick={() => { confirmCyc(previewBoxes, previewPast, previewRandomize, manuallyMoved); setShowBoxPreview(false); setSwapSrc(null); setManuallyMoved(new Set()); }} style={{ ...bpS, marginTop: 0, background: "linear-gradient(135deg," + P.amber + ",#F59E0B)", color: P.navy }}>Start Round {st.cycleNumber + 1}</button>
+        <button onClick={() => { confirmCyc(previewBoxes, previewRandomize, manuallyMoved); setShowBoxPreview(false); setSwapSrc(null); setManuallyMoved(new Set()); }} style={{ ...bpS, marginTop: 0, background: "linear-gradient(135deg," + P.amber + ",#F59E0B)", color: P.navy }}>Start Round {st.cycleNumber + 1}</button>
         <button onClick={() => { setPreviewBoxes(suggestedBoxes.map(b => ({ ...b, players: [...b.players] }))); setManuallyMoved(new Set()); setSwapSrc(null); }} style={{ ...bcS, color: P.blue }}>Reset to Suggested</button>
         <button onClick={() => { setShowBoxPreview(false); setSwapSrc(null); setManuallyMoved(new Set()); }} style={bcS}>Cancel</button>
       </div>
@@ -1529,7 +1530,6 @@ function AdminV({ st, ladder, previewCyc, confirmCyc, completeCyc, endEarlyCyc, 
                 if (!data) return;
                 setPreviewBoxes(data.suggestedBoxes.map(b => ({ ...b, players: [...b.players] })));
                 setSuggestedBoxes(data.suggestedBoxes.map(b => ({ ...b, players: [...b.players] })));
-                setPreviewPast(data.past);
                 setPreviewRandomize(data.randomize);
                 setManuallyMoved(new Set());
                 setSwapSrc(null);
