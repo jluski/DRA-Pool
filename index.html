@@ -243,7 +243,7 @@ function App() {
   const completeCyc = () => {
     const bon = [];
     if (st.boxes) st.boxes.forEach((box, bi) => { const bm = (st.boxMatches || []).filter(m => m.box === bi); if (bm.length > 0 && bm.every(m => m.completed)) { const bs = boxSt(box.players, bm); if (bs[0]) bon.push({ id: bs[0].id, pts: 3 }); if (bs[1]) bon.push({ id: bs[1].id, pts: 1 }); } });
-    const past = st.cycleNumber > 0 ? [...st.pastCycles, { cycle: st.cycleNumber, boxMatches: st.boxMatches || [], wildCards: st.wildCards || [], openChallenges: st.openChallenges || [], boxes: st.boxes || [], bonuses: [...bon], startedAt: st.cycleStart }] : st.pastCycles;
+    const past = st.cycleNumber > 0 ? [...st.pastCycles, { cycle: st.cycleNumber, boxMatches: st.boxMatches || [], wildCards: st.wildCards || [], openChallenges: st.openChallenges || [], boxes: st.boxes || [], bonuses: [...bon], startedAt: st.cycleStart, randomized: st.cycleRandomized || false }] : st.pastCycles;
     save(withLog({ ...st, pastCycles: past, boxes: [], boxMatches: [], wildCards: [], openChallenges: [] }, "CYCLE_COMPLETED", "Round " + st.cycleNumber));
     flash("Round " + st.cycleNumber + " complete!");
   };
@@ -255,13 +255,13 @@ function App() {
       const afBM = (st.boxMatches || []).map(m => { if (!m.completed) { return { ...m, score1: 0, score2: 0, completed: true, completedAt: nw(), forfeit: true, autoForfeit: true }; } return m; });
       const afWC = (st.wildCards || []).map(m => { if (!m.completed) { return { ...m, score1: 0, score2: 0, completed: true, completedAt: nw(), forfeit: true, autoForfeit: true }; } return m; });
       if (st.boxes) st.boxes.forEach((box, bi) => { const bm = afBM.filter(m => m.box === bi); if (bm.length > 0 && bm.every(m => m.completed)) { const bs = boxSt(box.players, bm); if (bs[0]) bon.push({ id: bs[0].id, pts: 3 }); if (bs[1]) bon.push({ id: bs[1].id, pts: 1 }); } });
-      past = [...st.pastCycles, { cycle: st.cycleNumber, boxMatches: afBM, wildCards: afWC, openChallenges: st.openChallenges, boxes: st.boxes, bonuses: [...bon], startedAt: st.cycleStart }];
+      past = [...st.pastCycles, { cycle: st.cycleNumber, boxMatches: afBM, wildCards: afWC, openChallenges: st.openChallenges, boxes: st.boxes, bonuses: [...bon], startedAt: st.cycleStart, randomized: randomize }];
     }
     const nl = calcLad(st.players, { ...st, pastCycles: past, boxMatches: [], wildCards: [], openChallenges: [], boxes: [] });
     const boxes = buildBoxes(st.checkedIn, nl, randomize); const bm = genBM(boxes); const wc = genWC(boxes);
     const lastCyc = past[past.length - 1];
     const autoCI = lastCyc ? [...new Set([...(lastCyc.boxMatches || []), ...(lastCyc.wildCards || []), ...(lastCyc.openChallenges || [])].filter(m => m.completed && !m.forfeit && !(m.score1 === 0 && m.score2 === 0)).flatMap(m => [m.player1, m.player2]))].filter(id => st.players.some(p => p.id === id)) : [];
-    const ns = { ...st, pastCycles: past, boxes, boxMatches: bm, wildCards: wc, openChallenges: [], checkedIn: autoCI, cycleStart: nw(), cycleNumber: st.cycleNumber + 1 };
+    const ns = { ...st, pastCycles: past, boxes, boxMatches: bm, wildCards: wc, openChallenges: [], checkedIn: autoCI, cycleStart: nw(), cycleNumber: st.cycleNumber + 1, cycleRandomized: randomize };
     save(withLog(ns, "CYCLE_STARTED", "Round " + (st.cycleNumber + 1)));
     flash("Round " + (st.cycleNumber + 1) + " started!");
   };
@@ -323,7 +323,7 @@ function App() {
         {view === "challenge" && <ChallengeV players={st.players} newOC={newOC} />}
         {view === "checkin" && <CheckInV st={st} ladder={ladder} togCI={togCI} autoOpen={checkInFocus} onAutoOpenDone={() => setCheckInFocus(false)} />}
         {view === "rules" && <RulesV />}
-        {view === "admin" && <AdminV st={st} ladder={ladder} startCyc={startCyc} completeCyc={completeCyc} undoCyc={undoCyc} resetAll={resetAll} addP={addP} rmP={rmP} ffM={ffM} gn={gn} save={save} />}
+        {view === "admin" && <AdminV st={st} ladder={ladder} startCyc={startCyc} completeCyc={completeCyc} undoCyc={undoCyc} resetAll={resetAll} addP={addP} rmP={rmP} ffM={ffM} gn={gn} save={save} togCI={togCI} />}
       </main>
       <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 10, padding: "0 14px", paddingBottom: "max(10px, env(safe-area-inset-bottom))" }}>
         <nav style={{ display: "flex", justifyContent: "space-around", alignItems: "center", padding: "6px 4px", background: "rgba(255,255,255,.08)", backdropFilter: "blur(40px) saturate(200%)", WebkitBackdropFilter: "blur(40px) saturate(200%)", borderRadius: 28, border: "1px solid rgba(255,255,255,.18)", borderTop: "1px solid rgba(255,255,255,.28)", boxShadow: "0 8px 40px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.18)", position: "relative", marginBottom: 8, overflow: "hidden" }}>
@@ -703,7 +703,7 @@ function CheckInV({ st, ladder, togCI, autoOpen, onAutoOpenDone }) {
   const boxWcIds = new Set([...(st.boxMatches || []), ...(st.wildCards || [])].filter(m => m.completed && !m.forfeit).flatMap(m => [m.player1, m.player2]));
   const allCurrentIds = new Set([...(st.boxMatches || []), ...(st.wildCards || []), ...(st.openChallenges || [])].filter(m => m.completed && !m.forfeit).flatMap(m => [m.player1, m.player2]));
   const returning = playing.filter(s => boxWcIds.has(s.id));
-  const newPlayers = playing.filter(s => !allCurrentIds.has(s.id));
+  const newPlayers = playing.filter(s => !boxWcIds.has(s.id) && !allCurrentIds.has(s.id));
   const other = playing.filter(s => allCurrentIds.has(s.id) && !boxWcIds.has(s.id));
   const filtered = search.trim() ? notPlaying.filter(s => s.name.toLowerCase().includes(search.toLowerCase())) : notPlaying;
 
@@ -1169,11 +1169,12 @@ function PastCycleRow({ c, gn, cycleIdx, saveCycle }) {
   );
 }
 
-function AdminV({ st, ladder, startCyc, completeCyc, undoCyc, resetAll, addP, rmP, ffM, gn, save }) {
+function AdminV({ st, ladder, startCyc, completeCyc, undoCyc, resetAll, addP, rmP, ffM, gn, save, togCI }) {
   const [pin, setPin] = useState(""); const [ok, setOk] = useState(false); const [err, setErr] = useState(false);
   const [cc, setCc] = useState(false); const [cr, setCr] = useState(false); const [cu, setCu] = useState(false); const [randomRound, setRandomRound] = useState(false);
   const [nm, setNm] = useState(""); const [rmId, setRmId] = useState(null); const [search, setSearch] = useState("");
   const [showPlayers, setShowPlayers] = useState(true);
+  const [showCheckedIn, setShowCheckedIn] = useState(false);
   const [showPinChange, setShowPinChange] = useState(false); const [newPinA, setNewPinA] = useState(""); const [newPinB, setNewPinB] = useState(""); const [pinErr, setPinErr] = useState("");
   const daysInCycle = st.cycleStart ? dd(nw(), st.cycleStart) : 0;
   const pendingMatches = [
@@ -1228,6 +1229,33 @@ function AdminV({ st, ladder, startCyc, completeCyc, undoCyc, resetAll, addP, rm
           <p style={{ fontSize: 12, color: P.grey, marginBottom: 10 }}>
             {!st.cycleNumber ? "No active round." : cycleComplete ? "Round " + st.cycleNumber + " complete. Ready for next." : "Round " + st.cycleNumber + ". " + pend + " pending. " + st.checkedIn.length + " checked in."}
           </p>
+          {st.checkedIn.length > 0 && (() => {
+            const N = st.checkedIn.length;
+            let suggestion;
+            if (N % 4 === 0) suggestion = (N / 4) + " box" + (N / 4 !== 1 ? "es" : "") + " of 4 — perfect fit";
+            else if (N % 4 === 1) suggestion = (Math.floor(N / 4) - 1) + " boxes of 4 + swing of 5 (or remove 1)";
+            else if (N % 4 === 2) suggestion = Math.floor(N / 4) + " box" + (Math.floor(N / 4) !== 1 ? "es" : "") + " of 4 + swing of 6";
+            else suggestion = Math.floor(N / 4) + " box" + (Math.floor(N / 4) !== 1 ? "es" : "") + " of 4 + swing of 3";
+            return (
+              <div style={{ marginBottom: 10 }}>
+                <div onClick={() => setShowCheckedIn(v => !v)} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", marginBottom: 4 }}>
+                  <span style={{ fontSize: 9, fontWeight: 700, color: P.dim }}>{showCheckedIn ? "▼" : "▶"}</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: P.grey }}>SIGNED UP ({N})</span>
+                  <span style={{ fontSize: 10, color: P.dim, marginLeft: "auto" }}>{suggestion}</span>
+                </div>
+                {showCheckedIn && (
+                  <div style={{ background: "rgba(0,20,40,.4)", borderRadius: 10, padding: "6px 10px" }}>
+                    {st.checkedIn.map(id => (
+                      <div key={id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 0", borderBottom: "1px solid rgba(21,152,203,.06)" }}>
+                        <span style={{ flex: 1, fontSize: 12, color: P.off }}>{gn(id)}</span>
+                        <button onClick={() => togCI(id)} style={{ background: "transparent", border: "1px solid " + P.bad, borderRadius: 6, color: P.bad, fontSize: 10, fontWeight: 700, padding: "2px 8px", cursor: "pointer" }}>Remove</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
           {allDone && (
             <div style={{ background: "rgba(52,211,153,.08)", border: "1px solid rgba(52,211,153,.25)", borderRadius: 12, padding: "10px 14px", marginBottom: 8 }}>
               <p style={{ fontSize: 12, color: P.ok, fontWeight: 700, marginBottom: 6 }}>✓ All matches complete</p>
@@ -1275,10 +1303,19 @@ function AdminV({ st, ladder, startCyc, completeCyc, undoCyc, resetAll, addP, rm
           <h4 style={{ fontSize: 15, fontWeight: 600, color: P.orange, fontFamily: "Georgia,serif", marginBottom: 4 }}>Round {lastC.cycle} Summary</h4>
           <p style={{ fontSize: 10, color: P.dim, marginBottom: 10 }}>{fmtDate(lastC.startedAt)}</p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {champ && <div style={{ flex: 1, minWidth: 100, background: "rgba(0,20,40,.4)", borderRadius: 10, padding: "10px 12px", border: "1px solid rgba(241,138,0,.2)" }}>
-              <p style={{ fontSize: 9, color: P.orange, fontWeight: 700, letterSpacing: 1, marginBottom: 4 }}>🏆 CHAMPION</p>
-              <p style={{ fontSize: 13, color: P.white, fontWeight: 600 }}>{gn(champ.id)}</p>
-            </div>}
+            {lastC.randomized ? (
+              <div style={{ flex: "0 0 100%", background: "rgba(0,20,40,.4)", borderRadius: 10, padding: "10px 12px", border: "1px solid rgba(196,161,255,.25)" }}>
+                <p style={{ fontSize: 9, color: P.wc, fontWeight: 700, letterSpacing: 1, marginBottom: 6 }}>🎲 BOX WINNERS</p>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 14px" }}>
+                  {(lastC.boxes || []).map((box, bi) => { const bm = (lastC.boxMatches || []).filter(m => m.box === bi); const winner = boxSt(box.players, bm)[0]; return winner ? (<div key={bi} style={{ display: "flex", alignItems: "baseline", gap: 5 }}><span style={{ fontSize: 9, color: P.dim, fontWeight: 700 }}>{box.name}:</span><span style={{ fontSize: 12, color: P.white, fontWeight: 600 }}>{gn(winner.id)}</span></div>) : null; })}
+                </div>
+              </div>
+            ) : (
+              champ && <div style={{ flex: 1, minWidth: 100, background: "rgba(0,20,40,.4)", borderRadius: 10, padding: "10px 12px", border: "1px solid rgba(241,138,0,.2)" }}>
+                <p style={{ fontSize: 9, color: P.orange, fontWeight: 700, letterSpacing: 1, marginBottom: 4 }}>🏆 CHAMPION</p>
+                <p style={{ fontSize: 13, color: P.white, fontWeight: 600 }}>{gn(champ.id)}</p>
+              </div>
+            )}
             {topScorer && <div style={{ flex: 1, minWidth: 100, background: "rgba(0,20,40,.4)", borderRadius: 10, padding: "10px 12px", border: "1px solid rgba(21,152,203,.2)" }}>
               <p style={{ fontSize: 9, color: P.blue, fontWeight: 700, letterSpacing: 1, marginBottom: 4 }}>⭐ TOP SCORER</p>
               <p style={{ fontSize: 13, color: P.white, fontWeight: 600 }}>{gn(topScorer.id)} <span style={{ color: P.orange, fontSize: 11 }}>{topScorer.pts}pts</span></p>
