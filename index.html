@@ -701,9 +701,10 @@ function CheckInV({ st, ladder, togCI, autoOpen, onAutoOpenDone }) {
   const playing = ladder.filter(s => st.checkedIn.includes(s.id));
   const notPlaying = ladder.filter(s => !st.checkedIn.includes(s.id));
   const boxWcIds = new Set([...(st.boxMatches || []), ...(st.wildCards || [])].filter(m => m.completed && !m.forfeit).flatMap(m => [m.player1, m.player2]));
+  const allCurrentIds = new Set([...(st.boxMatches || []), ...(st.wildCards || []), ...(st.openChallenges || [])].filter(m => m.completed && !m.forfeit).flatMap(m => [m.player1, m.player2]));
   const returning = playing.filter(s => boxWcIds.has(s.id));
-  const newPlayers = playing.filter(s => !boxWcIds.has(s.id) && (s.mp || 0) === 0);
-  const other = playing.filter(s => !boxWcIds.has(s.id) && (s.mp || 0) > 0);
+  const newPlayers = playing.filter(s => !allCurrentIds.has(s.id));
+  const other = playing.filter(s => allCurrentIds.has(s.id) && !boxWcIds.has(s.id));
   const filtered = search.trim() ? notPlaying.filter(s => s.name.toLowerCase().includes(search.toLowerCase())) : notPlaying;
 
   const secBtn = (label, show, onToggle, count) => (
